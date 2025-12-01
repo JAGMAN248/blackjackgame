@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="strategy-advisor" id="strategy-advisor">
+        <div class="advisor-header">
+            <h3>🎯 Strategy Advisor</h3>
+        </div>
+        <div class="advisor-content">
+            <div class="recommendation" id="recommendation">
+                <p>Place a bet to get strategy advice</p>
+            </div>
+            <div class="advisor-details" id="advisor-details"></div>
+        </div>
+    </div>
+    <div class="container">
+        <header>
+            <h1>♠️ Blackjack ♥️</h1>
+            <div class="header-stats">
+                <div class="balance-container">
+                    <span>Balance: $</span>
+                    <span id="balance">1000</span>
+                </div>
+                <div class="count-container">
+                    <span>Running Count: </span>
+                    <span id="running-count">0</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="game-area">
+            <div class="dealer-section">
+                <h2>Dealer</h2>
+                <div class="score" id="dealer-score">Score: -</div>
+                <div class="cards" id="dealer-cards"></div>
+            </div>
+
+            <div class="player-section">
+                <h2>Player</h2>
+                <div class="score" id="player-score">Score: -</div>
+                <div class="cards" id="player-cards"></div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="deck-selector">
+                <label for="deck-count">Number of Decks: </label>
+                <select id="deck-count" disabled>
+                    <option value="1" selected>1 Deck</option>
+                    <option value="2">2 Decks</option>
+                    <option value="4">4 Decks</option>
+                    <option value="6">6 Decks</option>
+                    <option value="8">8 Decks</option>
+                </select>
+            </div>
+            <div class="min-bet-display">
+                <span>Minimum Bet: $<span id="min-bet">50</span></span>
+            </div>
+            <div class="cards-remaining-display">
+                <span>Cards Remaining: <span id="cards-remaining">52</span></span>
+            </div>
+        </div>
+        
+        <div class="penetration-section">
+            <label for="penetration-slider">Deck Penetration: <span id="penetration-value">100</span>%</label>
+            <input type="range" id="penetration-slider" min="50" max="100" value="100" step="5" disabled>
+        </div>
+
+        <div class="betting-section">
+            <label for="bet-amount">Bet Amount: $</label>
+            <input type="number" id="bet-amount" min="50" value="50" max="1000" step="50">
+            <button id="place-bet-btn" class="btn btn-bet">Place Bet</button>
+        </div>
+
+        <div class="controls">
+            <button id="hit-btn" class="btn btn-hit" disabled>Hit</button>
+            <button id="double-btn" class="btn btn-double" disabled>Double</button>
+            <button id="stand-btn" class="btn btn-stand" disabled>Stand</button>
+            <button id="new-game-btn" class="btn btn-new-game" disabled>New Game</button>
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
