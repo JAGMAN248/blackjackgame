@@ -264,7 +264,8 @@ function checkForBlackjackAfterManualEntry() {
 
 // Add a card manually to the specified hand
 function addManualCardToHand(suit, value, target) {
-    // Check if this card exists in the deck
+    // With multiple decks, we can have multiple copies of the same card
+    // Check if this card exists in the deck (at least one copy)
     const cardExists = deck.some(card => card.suit === suit && card.value === value);
     
     if (!cardExists) {
@@ -272,17 +273,7 @@ function addManualCardToHand(suit, value, target) {
         return false;
     }
     
-    // Check if card is already in any hand
-    const allHands = [playerHand, playerHand2, dealerHand].filter(h => h);
-    const cardInHand = allHands.some(hand => 
-        hand.some(card => card.suit === suit && card.value === value)
-    );
-    
-    if (cardInHand) {
-        showMessage(`Card ${value}${suit} is already in play!`, 'lose');
-        return false;
-    }
-    
+    // No need to check if card is already in play - multiple decks allow duplicates
     const card = { suit, value };
     
     // Add to the appropriate hand
@@ -296,7 +287,7 @@ function addManualCardToHand(suit, value, target) {
         return false;
     }
     
-    // Remove from deck
+    // Remove one instance from deck (supports multiple decks)
     removeCardFromDeck(suit, value);
     
     // Update running count
