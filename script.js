@@ -14,6 +14,7 @@ let playerHasHit = false; // Track if player has already hit (for double down)
 let playerHasHit2 = false; // Track if second hand has been hit
 let dealerPlaying = false; // Track if dealer is currently playing
 let runningCount = 0; // Hi-Lo card counting system
+let previousRunningCount = 0; // Track previous count to detect changes
 let numberOfDecks = 1; // Number of decks to use (default 1)
 let penetrationPercent = 100; // Deck penetration percentage (50-100%)
 let maxCardsInShoe = 0; // Maximum cards before reshuffle (based on penetration)
@@ -146,6 +147,9 @@ function getCardCountValue(card) {
 
 // Update running count display
 function updateCountDisplay() {
+    // Check if count actually changed
+    const countChanged = previousRunningCount !== runningCount;
+    
     runningCountEl.textContent = runningCount > 0 ? `+${runningCount}` : runningCount;
     // Color code: positive = green, negative = red, zero = white
     if (runningCount > 0) {
@@ -164,6 +168,12 @@ function updateCountDisplay() {
     
     // Update true count in tracker
     updateTrackerTrueCount();
+    
+    // If count changed, update strategy advisor
+    if (countChanged) {
+        previousRunningCount = runningCount;
+        updateStrategyAdvisor();
+    }
 }
 
 // Update true count display in tracker
@@ -928,8 +938,13 @@ function updateStrategyAdvisor() {
         const betMultiplier = betRec.amount / MIN_BET;
         let betReason = '';
         
+        let countNote = '';
+        
         if (betRec.trueCount <= 0) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet minimum.`;
+            if (betRec.trueCount <= -2) {
+                countNote = '<br><br>⚠️ <strong>Very negative count - bet small!</strong> The deck favors the dealer.';
+            }
         } else if (betRec.trueCount === 1) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $100.`;
         } else if (betRec.trueCount === 2) {
@@ -938,16 +953,20 @@ function updateStrategyAdvisor() {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $500.`;
         } else if (betRec.trueCount === 4) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1000.`;
+            countNote = '<br><br>✅ <strong>Positive count - bet bigger!</strong> The deck favors you.';
         } else if (betRec.trueCount === 5) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1200.`;
+            countNote = '<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.';
         } else if (betRec.trueCount === 6) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1500.`;
+            countNote = '<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.';
         } else {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $2500!`;
+            countNote = '<br><br>🎯 <strong>Extremely positive count - bet maximum!</strong> The deck heavily favors you!';
         }
         
         recommendationEl.innerHTML = `<p>💰 Recommended Bet: $${betRec.amount.toLocaleString()}</p>`;
-        advisorDetailsEl.innerHTML = `<strong>${betReason}</strong><br><br>Place a bet to get playing strategy advice.`;
+        advisorDetailsEl.innerHTML = `<strong>${betReason}</strong>${countNote}<br><br>Place a bet to get playing strategy advice.`;
         recommendationEl.className = 'recommendation double';
         return;
     }
@@ -989,6 +1008,17 @@ function updateStrategyAdvisor() {
     
     // Build details - reason already includes count considerations
     let details = `<strong>${strategy.reason}</strong>`;
+    
+    // Add betting note based on count
+    const cardsDealt = 52 * numberOfDecks - deck.length;
+    const estimatedDecksRemaining = Math.max(1, (52 * numberOfDecks - cardsDealt) / 52);
+    const trueCount = Math.floor(runningCount / estimatedDecksRemaining);
+    
+    if (trueCount >= 4) {
+        details += '<br><br>✅ <strong>Very positive count - consider betting bigger next round!</strong>';
+    } else if (trueCount <= -2) {
+        details += '<br><br>⚠️ <strong>Very negative count - consider betting smaller next round!</strong>';
+    }
     
     advisorDetailsEl.innerHTML = details;
 }

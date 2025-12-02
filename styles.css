@@ -957,3 +957,64 @@ header h1 {
     }
 }
 
+/* Bottom Left Logo Sidebar */
+.logo-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 80px;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 20px;
+}
+
+.logo-sidebar:hover {
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.logo {
+    font-size: 32px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.logo-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+    .logo-sidebar {
+        width: 60px;
+        padding: 15px 10px;
+    }
+    
+    .logo {
+        font-size: 24px;
+    }
+    
+    .logo-text {
+        font-size: 10px;
+    }
+}
+
