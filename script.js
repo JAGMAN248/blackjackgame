@@ -925,6 +925,32 @@ function getRecommendedBet() {
     };
 }
 
+// Get expected cards based on count
+function getExpectedCards(trueCount) {
+    if (trueCount >= 3) {
+        // Positive count: more low cards dealt, high cards more likely
+        return {
+            likely: 'High cards (10, J, Q, K, A)',
+            unlikely: 'Low cards (2-6)',
+            reason: 'More low cards have been dealt, so high cards are more likely'
+        };
+    } else if (trueCount <= -2) {
+        // Negative count: more high cards dealt, low cards more likely
+        return {
+            likely: 'Low cards (2-6)',
+            unlikely: 'High cards (10, J, Q, K, A)',
+            reason: 'More high cards have been dealt, so low cards are more likely'
+        };
+    } else {
+        // Neutral count: cards are roughly balanced
+        return {
+            likely: 'Balanced',
+            unlikely: null,
+            reason: 'Card distribution is roughly balanced'
+        };
+    }
+}
+
 // Update strategy advisor display
 function updateStrategyAdvisor() {
     const strategy = getBasicStrategy();
@@ -939,11 +965,12 @@ function updateStrategyAdvisor() {
         let betReason = '';
         
         let countNote = '';
+        const expectedCards = getExpectedCards(betRec.trueCount);
         
         if (betRec.trueCount <= 0) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet minimum.`;
             if (betRec.trueCount <= -2) {
-                countNote = '<br><br>⚠️ <strong>Very negative count - bet small!</strong> The deck favors the dealer.';
+                countNote = `<br><br>⚠️ <strong>Very negative count - bet small!</strong> The deck favors the dealer.<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
             }
         } else if (betRec.trueCount === 1) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $100.`;
@@ -951,18 +978,19 @@ function updateStrategyAdvisor() {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $300.`;
         } else if (betRec.trueCount === 3) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $500.`;
+            countNote = `<br><br>✅ <strong>Positive count - bet bigger!</strong> The deck favors you.<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
         } else if (betRec.trueCount === 4) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1000.`;
-            countNote = '<br><br>✅ <strong>Positive count - bet bigger!</strong> The deck favors you.';
+            countNote = `<br><br>✅ <strong>Positive count - bet bigger!</strong> The deck favors you.<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
         } else if (betRec.trueCount === 5) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1200.`;
-            countNote = '<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.';
+            countNote = `<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
         } else if (betRec.trueCount === 6) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1500.`;
-            countNote = '<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.';
+            countNote = `<br><br>✅ <strong>Very positive count - bet big!</strong> The deck strongly favors you.<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
         } else {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $2500!`;
-            countNote = '<br><br>🎯 <strong>Extremely positive count - bet maximum!</strong> The deck heavily favors you!';
+            countNote = `<br><br>🎯 <strong>Extremely positive count - bet maximum!</strong> The deck heavily favors you!<br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}`;
         }
         
         recommendationEl.innerHTML = `<p>💰 Recommended Bet: $${betRec.amount.toLocaleString()}</p>`;
@@ -1009,15 +1037,39 @@ function updateStrategyAdvisor() {
     // Build details - reason already includes count considerations
     let details = `<strong>${strategy.reason}</strong>`;
     
-    // Add betting note based on count
+    // Add betting note and expected cards based on count
     const cardsDealt = 52 * numberOfDecks - deck.length;
     const estimatedDecksRemaining = Math.max(1, (52 * numberOfDecks - cardsDealt) / 52);
     const trueCount = Math.floor(runningCount / estimatedDecksRemaining);
+    const expectedCards = getExpectedCards(trueCount);
+    const playerValue = calculateHandValue(getActiveHand());
     
+    // Add decision-specific expected card information
+    let cardAdvice = '';
+    if (strategy.action === 'hit') {
+        // When hitting, tell them what card they're hoping for
+        if (playerValue <= 11) {
+            cardAdvice = ` You're hoping for a ${expectedCards.likely === 'High cards (10, J, Q, K, A)' ? 'high card (10-A)' : expectedCards.likely === 'Low cards (2-6)' ? 'low card (2-6)' : 'card'} to improve your hand.`;
+        } else if (playerValue >= 12 && playerValue <= 16) {
+            cardAdvice = ` You need a ${expectedCards.likely === 'High cards (10, J, Q, K, A)' ? 'low card (2-6)' : expectedCards.likely === 'Low cards (2-6)' ? 'high card (10-A)' : 'low card'} to avoid busting.`;
+        }
+    } else if (strategy.action === 'double') {
+        // When doubling, tell them what card they need
+        cardAdvice = ` You need a ${expectedCards.likely === 'High cards (10, J, Q, K, A)' ? 'high card (10-A)' : expectedCards.likely === 'Low cards (2-6)' ? 'low card (2-6)' : 'good card'} to make this double pay off.`;
+    } else if (strategy.action === 'stand') {
+        // When standing, tell them what card would help the dealer
+        cardAdvice = ` Dealer is more likely to get ${expectedCards.likely === 'High cards (10, J, Q, K, A)' ? 'high cards' : expectedCards.likely === 'Low cards (2-6)' ? 'low cards' : 'balanced cards'}, which ${expectedCards.likely === 'High cards (10, J, Q, K, A)' ? 'could help them' : expectedCards.likely === 'Low cards (2-6)' ? 'could help them avoid busting' : 'could go either way'}.`;
+    }
+    
+    // Add count-based betting advice and expected cards
     if (trueCount >= 4) {
-        details += '<br><br>✅ <strong>Very positive count - consider betting bigger next round!</strong>';
+        details += `<br><br>✅ <strong>Very positive count - consider betting bigger next round!</strong><br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}${cardAdvice}`;
     } else if (trueCount <= -2) {
-        details += '<br><br>⚠️ <strong>Very negative count - consider betting smaller next round!</strong>';
+        details += `<br><br>⚠️ <strong>Very negative count - consider betting smaller next round!</strong><br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}${cardAdvice}`;
+    } else if (trueCount >= 2 || trueCount <= -1) {
+        details += `<br><br>📊 Expected: ${expectedCards.likely} are more likely. ${expectedCards.reason}${cardAdvice}`;
+    } else if (cardAdvice) {
+        details += cardAdvice;
     }
     
     advisorDetailsEl.innerHTML = details;
