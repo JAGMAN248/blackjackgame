@@ -20,6 +20,10 @@ let maxCardsInShoe = 0; // Maximum cards before reshuffle (based on penetration)
 const MIN_BET = 50; // Minimum bet at this table
 let manualEntryEnabled = false; // Track if manual card entry is enabled
 let currentManualTarget = null; // Track which hand/position is being targeted for manual entry ('player', 'player2', 'dealer', or null)
+let cardHistory = []; // Track last 30 cards clicked in the count tracker
+const MAX_HISTORY = 30; // Maximum number of cards to track in history
+let suitsModeEnabled = false; // Track if suits mode is enabled
+let selectedSuit = '♠'; // Currently selected suit (default to spades)
 
 // Card suits and values
 const suits = ['♠', '♥', '♦', '♣'];
@@ -59,6 +63,13 @@ const modalCardValueEl = document.getElementById('modal-card-value');
 const modalCardSuitEl = document.getElementById('modal-card-suit');
 const confirmCardBtnEl = document.getElementById('confirm-card-btn');
 const cancelCardBtnEl = document.getElementById('cancel-card-btn');
+const cardCountTrackerEl = document.getElementById('card-count-tracker');
+const trackerRunningCountEl = document.getElementById('tracker-running-count');
+const trackerTrueCountEl = document.getElementById('tracker-true-count');
+const resetCountBtnEl = document.getElementById('reset-count-btn');
+const cardHistoryListEl = document.getElementById('card-history-list');
+const suitsModeToggleEl = document.getElementById('suits-mode-toggle');
+const suitSelectorEl = document.getElementById('suit-selector');
 
 // Initialize game
 function initGame() {
@@ -78,7 +89,12 @@ function initGame() {
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag
     balance = 10000; // Reset balance to $10000
     currentManualTarget = null; // Reset manual entry target
-    // Don't reset running count - it persists across games
+    // Reset running count on new game (user can manually track in manual entry mode)
+    runningCount = 0;
+    cardHistory = []; // Clear card history on new game
+    // Don't reset suits mode or selected suit - user preference persists
+    updateCountDisplay();
+    updateCardHistory();
     updateCardsRemaining();
     updateUI();
     clearMessage();
@@ -139,6 +155,28 @@ function updateCountDisplay() {
     } else {
         runningCountEl.className = 'count-zero';
     }
+    
+    // Update tracker display if it exists
+    if (trackerRunningCountEl) {
+        trackerRunningCountEl.textContent = runningCount > 0 ? `+${runningCount}` : runningCount;
+        trackerRunningCountEl.className = runningCount > 0 ? 'count-positive' : runningCount < 0 ? 'count-negative' : 'count-zero';
+    }
+    
+    // Update true count in tracker
+    updateTrackerTrueCount();
+}
+
+// Update true count display in tracker
+function updateTrackerTrueCount() {
+    if (!trackerTrueCountEl) return;
+    
+    // Calculate true count (running count / decks remaining)
+    const cardsDealt = 52 * numberOfDecks - deck.length;
+    const estimatedDecksRemaining = Math.max(1, (52 * numberOfDecks - cardsDealt) / 52);
+    const trueCount = Math.floor(runningCount / estimatedDecksRemaining);
+    
+    trackerTrueCountEl.textContent = trueCount > 0 ? `+${trueCount}` : trueCount;
+    trackerTrueCountEl.className = trueCount > 0 ? 'count-positive' : trueCount < 0 ? 'count-negative' : 'count-zero';
 }
 
 // Update cards remaining display
@@ -1537,11 +1575,16 @@ if (manualEntryToggleEl) {
         if (manualEntryInfoEl) {
             manualEntryInfoEl.style.display = manualEntryEnabled ? 'block' : 'none';
         }
+        // Show/hide card count tracker
+        if (cardCountTrackerEl) {
+            cardCountTrackerEl.style.display = manualEntryEnabled ? 'block' : 'none';
+        }
         if (!manualEntryEnabled) {
             currentManualTarget = null;
             hideCardSelectionModal();
         }
         updateUI();
+        updateCountDisplay(); // Update tracker counts
     });
 }
 
@@ -1590,6 +1633,209 @@ if (modalCardValueEl && modalCardSuitEl) {
             }
         });
     });
+}
+
+// Update card history display
+function updateCardHistory() {
+    if (!cardHistoryListEl) return;
+    
+    if (cardHistory.length === 0) {
+        cardHistoryListEl.innerHTML = '<div class="history-empty">No cards tracked yet</div>';
+        return;
+    }
+    
+    // Suit color mapping
+    const suitColors = {
+        '♠': '#3b82f6', // Blue for spades
+        '♣': '#10b981', // Green for clubs
+        '♦': '#fbbf24', // Yellow for diamonds
+        '♥': '#ef4444'  // Red for hearts
+    };
+    
+    // Display last 30 cards (most recent first)
+    const displayHistory = [...cardHistory].reverse(); // Show most recent first
+    cardHistoryListEl.innerHTML = displayHistory.map((card, index) => {
+        const countValue = getCardCountValue({ value: card.value });
+        const countDisplay = countValue > 0 ? `+${countValue}` : countValue;
+        
+        // Show suit if suits mode was enabled when this card was tracked
+        if (card.suit) {
+            const suitColor = suitColors[card.suit] || '#fff';
+            const cardValueStyle = `color: ${suitColor}; font-weight: bold;`;
+            const barStyle = `background: ${suitColor}20; border-left-color: ${suitColor};`;
+            return `<div class="history-item" style="${barStyle}"><span style="${cardValueStyle}">${card.value}</span>${card.suit} <span class="count-badge">${countDisplay}</span></div>`;
+        } else {
+            // Fallback to count-based colors if no suit
+            const countClass = countValue > 0 ? 'count-positive' : countValue < 0 ? 'count-negative' : 'count-zero';
+            return `<div class="history-item ${countClass}">${card.value} <span class="count-badge">${countDisplay}</span></div>`;
+        }
+    }).join('');
+}
+
+// Suits mode toggle handler
+if (suitsModeToggleEl) {
+    suitsModeToggleEl.addEventListener('change', (e) => {
+        suitsModeEnabled = e.target.checked;
+        if (suitSelectorEl) {
+            suitSelectorEl.style.display = suitsModeEnabled ? 'block' : 'none';
+        }
+        // Set default suit if enabling
+        if (suitsModeEnabled && suitSelectorEl) {
+            selectedSuit = suitSelectorEl.value;
+        }
+    });
+}
+
+// Suit selector change handler
+if (suitSelectorEl) {
+    suitSelectorEl.addEventListener('change', (e) => {
+        selectedSuit = e.target.value;
+    });
+}
+
+// Card count tracker button handlers
+if (resetCountBtnEl) {
+    resetCountBtnEl.addEventListener('click', () => {
+        runningCount = 0;
+        cardHistory = []; // Clear history when resetting count
+        updateCountDisplay();
+        updateCardHistory();
+        showMessage('Running count and history reset to 0', 'tie');
+    });
+}
+
+// Card button click handlers (for manual count tracking)
+// Works regardless of game state - always allows manual count tracking
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('card-btn')) {
+        const countValue = parseInt(e.target.getAttribute('data-count'));
+        const cardValue = e.target.getAttribute('data-value');
+        
+        // If suits mode is enabled, validate and track specific card
+        if (suitsModeEnabled) {
+            // Check if a suit is selected
+            if (!selectedSuit) {
+                showMessage('Please select a suit first!', 'lose');
+                return;
+            }
+            
+            // Check if this specific card (value + suit) can still be in the deck
+            const cardExists = deck.some(card => card.suit === selectedSuit && card.value === cardValue);
+            
+            if (!cardExists) {
+                showMessage(`Card ${cardValue}${selectedSuit} is not available in the deck!`, 'lose');
+                return;
+            }
+            
+            // Remove the specific card from deck (one instance)
+            removeCardFromDeck(selectedSuit, cardValue);
+            
+            // Add to history with suit
+            cardHistory.push({ value: cardValue, suit: selectedSuit, count: countValue });
+        } else {
+            // Suits mode disabled - just track value
+            cardHistory.push({ value: cardValue, count: countValue });
+        }
+        
+        // Keep only last 30 in history
+        if (cardHistory.length > MAX_HISTORY) {
+            cardHistory.shift(); // Remove oldest if over limit
+        }
+        
+        // Update running count (always allowed, regardless of game state)
+        runningCount += countValue;
+        updateCountDisplay();
+        updateCardHistory();
+        
+        // Show feedback
+        const countChange = countValue > 0 ? `+${countValue}` : countValue;
+        const cardDisplay = suitsModeEnabled ? `${cardValue}${selectedSuit}` : cardValue;
+        showMessage(`Card ${cardDisplay} clicked: ${countChange} (Running: ${runningCount > 0 ? '+' : ''}${runningCount})`, 'tie');
+        
+        // Update strategy advisor if game is in progress
+        if (gameInProgress) {
+            updateStrategyAdvisor();
+        }
+    }
+});
+
+// Dragging functionality for Strategy Advisor and Card Count Tracker
+function makeDraggable(element) {
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+    let originalPosition = null;
+    let originalTop = null;
+    let originalLeft = null;
+    
+    // Get the header element (drag handle)
+    const header = element.querySelector('.advisor-header') || element.querySelector('.tracker-header');
+    if (!header) return;
+    
+    header.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+    
+    function dragStart(e) {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'LABEL') {
+            return; // Don't drag if clicking on interactive elements
+        }
+        
+        if (e.target === header || header.contains(e.target)) {
+            // Store original position
+            const rect = element.getBoundingClientRect();
+            originalPosition = window.getComputedStyle(element).position;
+            originalTop = rect.top;
+            originalLeft = rect.left;
+            
+            initialX = e.clientX - rect.left;
+            initialY = e.clientY - rect.top;
+            
+            isDragging = true;
+            element.style.position = 'fixed';
+            element.style.left = `${rect.left}px`;
+            element.style.top = `${rect.top}px`;
+            element.style.width = `${rect.width}px`;
+            element.style.zIndex = '1000';
+            element.style.cursor = 'move';
+            element.style.margin = '0';
+        }
+    }
+    
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+            
+            element.style.left = `${currentX}px`;
+            element.style.top = `${currentY}px`;
+        }
+    }
+    
+    function dragEnd(e) {
+        if (isDragging) {
+            isDragging = false;
+            element.style.cursor = 'default';
+            // Keep fixed position but maintain dimensions
+            // Don't reset position so it stays where user dragged it
+        }
+    }
+}
+
+// Make Strategy Advisor draggable
+const strategyAdvisorEl = document.getElementById('strategy-advisor');
+if (strategyAdvisorEl) {
+    makeDraggable(strategyAdvisorEl);
+}
+
+// Make Card Count Tracker draggable
+if (cardCountTrackerEl) {
+    makeDraggable(cardCountTrackerEl);
 }
 
 // Initialize on load
