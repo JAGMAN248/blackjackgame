@@ -18,11 +18,6 @@ let numberOfDecks = 1; // Number of decks to use (default 1)
 let penetrationPercent = 100; // Deck penetration percentage (50-100%)
 let maxCardsInShoe = 0; // Maximum cards before reshuffle (based on penetration)
 const MIN_BET = 50; // Minimum bet at this table
-const MAX_CONSECUTIVE_LOSSES = 10; // Maximum consecutive losses before stopping recovery betting
-let previousRoundLost = false; // Track if previous round was a loss
-let previousBet = 0; // Track previous bet amount
-let initialBalance = 10000; // Track starting balance to detect if we're negative
-let consecutiveLosses = 0; // Track number of consecutive losses
 let manualEntryEnabled = false; // Track if manual card entry is enabled
 let currentManualTarget = null; // Track which hand/position is being targeted for manual entry ('player', 'player2', 'dealer', or null)
 
@@ -82,10 +77,6 @@ function initGame() {
     playerHasHit2 = false;
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag
     balance = 10000; // Reset balance to $10000
-    initialBalance = 10000; // Reset initial balance
-    previousRoundLost = false; // Reset previous round tracking
-    previousBet = 0; // Reset previous bet
-    consecutiveLosses = 0; // Reset consecutive losses counter
     currentManualTarget = null; // Reset manual entry target
     // Don't reset running count - it persists across games
     updateCardsRemaining();
@@ -215,7 +206,8 @@ function hideCardSelectionModal() {
 
 // Check for blackjack after manual cards are added (when initial 2 cards are in place)
 function checkForBlackjackAfterManualEntry() {
-    // Only check if we have 2 cards in each hand (initial deal complete)
+    // Only check if we have exactly 2 cards in each hand (blackjack is only possible with 2 cards)
+    // Don't decide the hand until player has at least 2 cards
     if (playerHand.length === 2 && dealerHand.length === 2 && gameInProgress) {
         const dealerBlackjack = isBlackjack(dealerHand);
         const playerBlackjack = isBlackjack(playerHand);
@@ -256,8 +248,10 @@ function checkForBlackjackAfterManualEntry() {
         }
         
         // Check for player blackjack (only if dealer doesn't have one)
-        if (playerBlackjack) {
-            setTimeout(() => stand(), 800); // Auto-stand on blackjack
+        if (playerBlackjack && !manualEntryEnabled) {
+            setTimeout(() => stand(), 800); // Auto-stand on blackjack (only in auto mode)
+        } else if (playerBlackjack && manualEntryEnabled) {
+            showMessage('Blackjack! Add more cards or click "End Game" to determine result.', 'win');
         }
     }
 }
@@ -301,8 +295,98 @@ function addManualCardToHand(suit, value, target) {
     // Check for blackjack if initial deal is complete
     checkForBlackjackAfterManualEntry();
     
+    // In manual entry mode, check strategy advisor for win conditions
+    if (manualEntryEnabled && gameInProgress) {
+        checkWinConditionsFromStrategy();
+    }
+    
     showMessage(`Added ${value}${suit} to ${target === 'player' ? 'player' : target === 'player2' ? 'player hand 2' : 'dealer'}`, 'tie');
     return true;
+}
+
+// Check win conditions based on strategy advisor
+function checkWinConditionsFromStrategy() {
+    if (!gameInProgress || !manualEntryEnabled) return;
+    
+    const strategy = getBasicStrategy();
+    const playerValue = calculateHandValue(playerHand);
+    const dealerValue = dealerHand.length >= 2 ? calculateHandValue(dealerHand) : 0;
+    
+    // Only check win conditions if player has at least 2 cards
+    if (playerHand.length < 2) return;
+    
+    // Check if player has busted
+    if (strategy.action === 'bust' || playerValue > 21) {
+        // Player busted - reveal dealer cards and end game
+        if (!dealerPlaying) {
+            dealerPlaying = true;
+            updateUI();
+        }
+        setTimeout(() => {
+            endGame();
+        }, 500);
+        return;
+    }
+    
+    // Check if player has blackjack (and dealer doesn't)
+    if (strategy.action === 'blackjack' && playerHand.length === 2) {
+        // Player has blackjack - reveal dealer cards and check result
+        if (!dealerPlaying) {
+            dealerPlaying = true;
+            updateUI();
+        }
+        // If dealer also has blackjack, it's a tie, otherwise player wins
+        if (dealerHand.length >= 2) {
+            const dealerBlackjack = isBlackjack(dealerHand);
+            if (!dealerBlackjack) {
+                // Player wins with blackjack
+                setTimeout(() => {
+                    endGame();
+                }, 500);
+            } else {
+                // Both have blackjack - tie
+                setTimeout(() => {
+                    endGame();
+                }, 500);
+            }
+        }
+        return;
+    }
+    
+    // Check dealer conditions (only if dealer has at least 2 cards)
+    if (dealerHand.length >= 2) {
+        // If dealer busts (over 21), reveal cards and end game
+        if (dealerValue > 21) {
+            if (!dealerPlaying) {
+                dealerPlaying = true;
+                updateUI();
+            }
+            setTimeout(() => {
+                endGame();
+            }, 500);
+            return;
+        }
+        
+        // If dealer has reached 17+, reveal cards and end game automatically
+        // This handles dealer cards added after player's decision
+        if (dealerValue >= 17 && dealerValue <= 21) {
+            // Dealer has reached 17+ - reveal dealer cards if not already revealed
+            if (!dealerPlaying) {
+                dealerPlaying = true;
+                updateUI();
+            }
+            // Always end the round when dealer reaches 17+ and determine result
+            // Use a small delay to ensure UI is updated
+            setTimeout(() => {
+                endGame();
+            }, 500);
+            return;
+        }
+        
+        // If player has a valid hand (not busted) and dealer is still below 17,
+        // wait for more dealer cards (dealer must hit until 17+)
+        // User will add dealer cards manually until dealer reaches 17+
+    }
 }
 
 // Calculate hand value (handles Aces)
@@ -438,8 +522,8 @@ function updateUI() {
         dealerHand.forEach((card, index) => {
             dealerCardsEl.appendChild(createCardElement(card, false, index));
         });
-        // Add empty slot for manual entry if enabled
-        if (manualEntryEnabled) {
+        // Add empty slot for manual entry if enabled (always show during game in manual mode)
+        if (manualEntryEnabled && gameInProgress) {
             dealerCardsEl.appendChild(createEmptyCardSlot('dealer', dealerHand.length));
         }
         const dealerValue = calculateHandValue(dealerHand);
@@ -453,9 +537,11 @@ function updateUI() {
     
     placeBetBtn.disabled = gameInProgress || balance <= 0;
     useRecommendedBtn.disabled = gameInProgress || balance <= 0;
-    hitBtn.disabled = !gameInProgress;
+    // Disable hit button in manual entry mode (cards are added manually)
+    hitBtn.disabled = !gameInProgress || manualEntryEnabled;
     // Double is only available on first two cards and if player has enough balance
-    doubleBtn.disabled = !gameInProgress || activeHasHit || activeHand.length !== 2 || balance < activeBet;
+    // Also disable in manual entry mode
+    doubleBtn.disabled = !gameInProgress || activeHasHit || activeHand.length !== 2 || balance < activeBet || manualEntryEnabled;
     // Split is only available on pairs, first two cards, before hitting, and if not already split
     splitBtn.disabled = !gameInProgress || !canSplit();
     // Insurance is only available when dealer shows Ace, before any player actions, on first hand only
@@ -464,7 +550,9 @@ function updateUI() {
     // Surrender is only available on first two cards, before hitting or doubling, first hand only
     surrenderBtn.disabled = !gameInProgress || isSplit || playerHasHit || playerHand.length !== 2;
     standBtn.disabled = !gameInProgress;
-    newGameBtn.disabled = gameInProgress;
+    // New Game button always resets the entire game session
+    newGameBtn.disabled = false; // Always enabled since it resets everything
+    newGameBtn.textContent = 'New Game';
     // Deck count selector - only enabled when no game in progress
     deckCountEl.disabled = gameInProgress;
     // Penetration slider - only enabled when no game in progress
@@ -737,71 +825,11 @@ function getBasicStrategy() {
 
 // Calculate recommended bet based on count (using bet spread table)
 function getRecommendedBet() {
-    // Calculate true count first (needed for recovery mode decisions)
+    // Calculate true count (running count / decks remaining)
+    // For simplicity, we'll estimate decks remaining based on cards dealt
     const cardsDealt = 52 * numberOfDecks - deck.length;
     const estimatedDecksRemaining = Math.max(1, (52 * numberOfDecks - cardsDealt) / 52);
     const trueCount = Math.floor(runningCount / estimatedDecksRemaining);
-    
-    // PRIORITY 1: If previous round was lost, suggest doubling to recover (regardless of count)
-    // This helps prevent going negative by trying to recover losses
-    // Also prioritize if balance is below initial balance (we're losing money overall)
-    // BUT: Don't suggest recovery if we've lost 10 times in a row (safety limit)
-    const isLosingMoney = balance < initialBalance;
-    const amountNeededForProfit = initialBalance - balance; // How much we need to get back to even
-    const canRecover = consecutiveLosses < MAX_CONSECUTIVE_LOSSES; // Check if we haven't hit the limit
-    
-    if (canRecover && ((previousRoundLost && previousBet > 0) || (isLosingMoney && previousBet > 0))) {
-        let recoveryBet = previousBet * 2;
-        let isProfitBet = false;
-        
-        // If count is really favorable (true count >= 4), try to bet enough to get back to profit
-        // Calculate bet needed: if we win, we get 2x back, so bet = amountNeededForProfit
-        // But we need to be smart - only do this if count is very favorable
-        if (trueCount >= 4 && amountNeededForProfit > 0) {
-            // Count is very favorable - bet enough to get back to profit
-            // But cap at 80% of balance to leave some buffer
-            const maxProfitBet = Math.floor(balance * 0.8);
-            recoveryBet = Math.min(amountNeededForProfit, maxProfitBet);
-            isProfitBet = true;
-        } else if (trueCount >= 3 && amountNeededForProfit > 0) {
-            // Count is favorable - bet 60% of what's needed (more conservative)
-            const maxProfitBet = Math.floor(balance * 0.6);
-            recoveryBet = Math.min(Math.floor(amountNeededForProfit * 0.6), maxProfitBet);
-            isProfitBet = true;
-        }
-        
-        // If we're losing money overall but not using profit bet, be more aggressive
-        if (isLosingMoney && !previousRoundLost && !isProfitBet) {
-            // We're down overall but last round wasn't a loss - still suggest recovery
-            recoveryBet = Math.max(previousBet * 2, MIN_BET * 2);
-        }
-        
-        // Cap at balance to prevent over-betting
-        recoveryBet = Math.min(recoveryBet, balance);
-        
-        // Round to nearest 50
-        recoveryBet = Math.floor(recoveryBet / 50) * 50;
-        
-        // Ensure at least minimum bet
-        recoveryBet = Math.max(recoveryBet, MIN_BET);
-        
-        // Only suggest recovery bet if we have enough balance
-        if (recoveryBet <= balance && recoveryBet >= MIN_BET) {
-            return {
-                amount: recoveryBet,
-                trueCount: trueCount,
-                runningCount: runningCount,
-                isRecoveryBet: true,
-                previousBet: previousBet,
-                isLosingMoney: isLosingMoney,
-                isProfitBet: isProfitBet,
-                amountNeededForProfit: amountNeededForProfit
-            };
-        }
-    }
-    
-    // PRIORITY 2: Normal count-based betting
-    // (trueCount already calculated above)
     
     // Bet spread based on true count (SOLO PLAY from table):
     // TRUE <= 0: Minimum bet ($50)
@@ -845,8 +873,7 @@ function getRecommendedBet() {
     return {
         amount: recommendedBet,
         trueCount: trueCount,
-        runningCount: runningCount,
-        isRecoveryBet: false
+        runningCount: runningCount
     };
 }
 
@@ -862,45 +889,6 @@ function updateStrategyAdvisor() {
         const betRec = getRecommendedBet();
         const betMultiplier = betRec.amount / MIN_BET;
         let betReason = '';
-        
-        // Priority: Show recovery bet message if previous round was lost
-        if (betRec.isRecoveryBet) {
-            let recoveryMessage = '';
-            let title = '';
-            
-            if (betRec.isProfitBet) {
-                // Count is favorable - betting to get back to profit
-                title = `🎯 Profit Recovery Bet: $${betRec.amount.toLocaleString()}`;
-                if (betRec.trueCount >= 4) {
-                    recoveryMessage = `✅ Count is VERY favorable (True: ${betRec.trueCount}, Running: ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount}). Betting $${betRec.amount.toLocaleString()} to get back to profit (need $${betRec.amountNeededForProfit.toLocaleString()}).`;
-                } else {
-                    recoveryMessage = `✅ Count is favorable (True: ${betRec.trueCount}, Running: ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount}). Betting $${betRec.amount.toLocaleString()} to get closer to profit (need $${betRec.amountNeededForProfit.toLocaleString()}).`;
-                }
-            } else {
-                // Standard recovery - double up
-                title = `🔄 Recovery Bet: $${betRec.amount.toLocaleString()}`;
-                if (betRec.isLosingMoney && previousRoundLost) {
-                    recoveryMessage = `⚠️ You're down overall AND previous round lost $${betRec.previousBet.toLocaleString()}. Double up to $${betRec.amount.toLocaleString()} to recover (count: ${betRec.trueCount > 0 ? '+' : ''}${betRec.trueCount}).`;
-                } else if (betRec.isLosingMoney) {
-                    recoveryMessage = `⚠️ You're down overall. Previous bet was $${betRec.previousBet.toLocaleString()}. Double up to $${betRec.amount.toLocaleString()} to recover (count: ${betRec.trueCount > 0 ? '+' : ''}${betRec.trueCount}).`;
-                } else {
-                    recoveryMessage = `⚠️ Previous round lost $${betRec.previousBet.toLocaleString()}. Double up to $${betRec.amount.toLocaleString()} to recover (count: ${betRec.trueCount > 0 ? '+' : ''}${betRec.trueCount}).`;
-                }
-            }
-            
-            betReason = recoveryMessage;
-            recommendationEl.innerHTML = `<p>${title}</p>`;
-            advisorDetailsEl.innerHTML = `<strong>${betReason}</strong><br><br>Priority: ${betRec.isProfitBet ? 'Use favorable count to get back to profit!' : 'Prevent going negative by recovering losses.'}`;
-            recommendationEl.className = 'recommendation double';
-            return;
-        }
-        
-        // Normal count-based betting
-        let limitWarning = '';
-        if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES && previousRoundLost) {
-            // Show warning that recovery betting is disabled
-            limitWarning = `<br><br>⚠️ <strong>Recovery limit reached:</strong> You've lost ${consecutiveLosses} rounds in a row. Recovery betting disabled for safety. Win a round to reset.`;
-        }
         
         if (betRec.trueCount <= 0) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet minimum.`;
@@ -921,7 +909,7 @@ function updateStrategyAdvisor() {
         }
         
         recommendationEl.innerHTML = `<p>💰 Recommended Bet: $${betRec.amount.toLocaleString()}</p>`;
-        advisorDetailsEl.innerHTML = `<strong>${betReason}</strong>${limitWarning}<br><br>Place a bet to get playing strategy advice.`;
+        advisorDetailsEl.innerHTML = `<strong>${betReason}</strong><br><br>Place a bet to get playing strategy advice.`;
         recommendationEl.className = 'recommendation double';
         return;
     }
@@ -1062,11 +1050,18 @@ function placeBet() {
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag for new game
     
     // If manual entry is enabled, don't deal cards automatically
+    // Preserve existing cards if they're already placed (don't reset on new bet)
     if (manualEntryEnabled) {
-        playerHand = [];
-        dealerHand = [];
-        updateUI();
-        showMessage('Add cards manually by clicking on the card slots', 'tie');
+        // If hands already have cards, preserve them (user placed cards before betting)
+        // Only show message if hands are empty
+        if (playerHand.length === 0 && dealerHand.length === 0) {
+            updateUI();
+            showMessage('Add cards manually by clicking on the card slots', 'tie');
+        } else {
+            // Cards already exist, preserve them and continue
+            updateUI();
+            showMessage('Bet placed. Continue adding cards or play your hand.', 'tie');
+        }
         return;
     }
     
@@ -1168,6 +1163,16 @@ function hit() {
     const playerValue = calculateHandValue(activeHand);
     
     updateUI();
+    
+    // In manual entry mode, don't auto-end on busts or 21 - let user decide
+    if (manualEntryEnabled) {
+        if (playerValue > 21) {
+            showMessage(`Hand value: ${playerValue} (Bust)`, 'lose');
+        } else if (playerValue === 21) {
+            showMessage(`Hand value: 21!`, 'win');
+        }
+        return;
+    }
     
     if (playerValue > 21) {
         // Current hand busts - move to next hand or end
@@ -1305,7 +1310,17 @@ function stand() {
         return;
     }
     
-    // All hands are done, dealer plays
+    // In manual entry mode, just reveal dealer cards but don't auto-play
+    if (manualEntryEnabled) {
+        // Set dealerPlaying flag to reveal all dealer cards
+        dealerPlaying = true;
+        revealDealerCard();
+        showMessage('Dealer cards revealed. Add cards manually or click "End Game" to determine result.', 'tie');
+        updateUI();
+        return;
+    }
+    
+    // All hands are done, dealer plays automatically
     // Set dealerPlaying flag FIRST - this ensures second card is revealed
     dealerPlaying = true;
     
@@ -1414,20 +1429,6 @@ function endGame(result, message) {
         }
     }
     
-    // Track previous round result for recovery betting
-    const totalBet = currentBet + bet2;
-    if (totalLoss > totalWin) {
-        // Previous round was a loss - mark for recovery betting
-        previousRoundLost = true;
-        previousBet = totalBet; // Store the total bet amount
-        consecutiveLosses++; // Increment consecutive losses counter
-    } else {
-        // Previous round was win or push - reset recovery tracking
-        previousRoundLost = false;
-        previousBet = 0;
-        consecutiveLosses = 0; // Reset consecutive losses counter
-    }
-    
     // Show summary message
     if (totalWin > totalLoss) {
         const netWin = totalWin - totalLoss;
@@ -1490,7 +1491,10 @@ splitBtn.addEventListener('click', split);
 insuranceBtn.addEventListener('click', takeInsurance);
 surrenderBtn.addEventListener('click', surrender);
 standBtn.addEventListener('click', stand);
-newGameBtn.addEventListener('click', initGame);
+newGameBtn.addEventListener('click', () => {
+    // End Game button always resets the entire game session
+    initGame();
+});
 
 // Deck count selector - update when changed (only when no game in progress)
 deckCountEl.addEventListener('change', (e) => {
