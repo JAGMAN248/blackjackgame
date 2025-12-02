@@ -2,8 +2,9 @@
 let deck = [];
 let playerHand = [];
 let dealerHand = [];
-let balance = 1000;
+let balance = 10000;
 let currentBet = 0;
+let insuranceBet = 0; // Insurance side bet
 let gameInProgress = false;
 let playerHasHit = false; // Track if player has already hit (for double down)
 let dealerPlaying = false; // Track if dealer is currently playing
@@ -22,9 +23,12 @@ const balanceEl = document.getElementById('balance');
 const runningCountEl = document.getElementById('running-count');
 const deckCountEl = document.getElementById('deck-count');
 const betAmountEl = document.getElementById('bet-amount');
+const useRecommendedBtn = document.getElementById('use-recommended-btn');
 const placeBetBtn = document.getElementById('place-bet-btn');
 const hitBtn = document.getElementById('hit-btn');
 const doubleBtn = document.getElementById('double-btn');
+const insuranceBtn = document.getElementById('insurance-btn');
+const surrenderBtn = document.getElementById('surrender-btn');
 const standBtn = document.getElementById('stand-btn');
 const newGameBtn = document.getElementById('new-game-btn');
 const playerCardsEl = document.getElementById('player-cards');
@@ -45,9 +49,11 @@ function initGame() {
     playerHand = [];
     dealerHand = [];
     currentBet = 0;
+    insuranceBet = 0; // Reset insurance bet
     gameInProgress = false;
     playerHasHit = false;
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag
+    balance = 10000; // Reset balance to $10000
     // Don't reset running count - it persists across games
     updateCardsRemaining();
     updateUI();
@@ -236,9 +242,15 @@ function updateUI() {
 
     // Update button states
     placeBetBtn.disabled = gameInProgress || balance <= 0;
+    useRecommendedBtn.disabled = gameInProgress || balance <= 0;
     hitBtn.disabled = !gameInProgress;
     // Double is only available on first two cards and if player has enough balance
     doubleBtn.disabled = !gameInProgress || playerHasHit || playerHand.length !== 2 || balance < currentBet;
+    // Insurance is only available when dealer shows Ace, before any player actions, and if player has enough balance
+    const maxInsurance = Math.floor(currentBet / 2);
+    insuranceBtn.disabled = !gameInProgress || !isDealerAce() || playerHasHit || insuranceBet > 0 || balance < maxInsurance || playerHand.length !== 2;
+    // Surrender is only available on first two cards, before hitting or doubling
+    surrenderBtn.disabled = !gameInProgress || playerHasHit || playerHand.length !== 2;
     standBtn.disabled = !gameInProgress;
     newGameBtn.disabled = gameInProgress;
     // Deck count selector - only enabled when no game in progress
@@ -259,6 +271,12 @@ function getDealerUpCard() {
     if (card.value === 'A') return 11;
     if (['J', 'Q', 'K'].includes(card.value)) return 10;
     return parseInt(card.value);
+}
+
+// Check if dealer's up card is an Ace
+function isDealerAce() {
+    if (dealerHand.length === 0) return false;
+    return dealerHand[0].value === 'A';
 }
 
 // Check if hand is soft (contains Ace counted as 11)
@@ -324,7 +342,7 @@ function getBasicStrategy() {
     }
     
     // Blackjack
-    if (playerValue === 21 && playerHand.length === 2) {
+    if (playerValue === 21 && currentHand.length === 2) {
         return { action: 'blackjack', reason: `${handDesc} vs ${dealerCardDesc}: Blackjack! Stand automatically` };
     }
     
@@ -342,9 +360,16 @@ function getBasicStrategy() {
                     return { action: 'hit', reason: `${handDesc} vs ${dealerCardDesc}: Hit (positive count ${runningCount > 0 ? '+' : ''}${runningCount} favors more aggressive play)` };
                 }
             }
+            // Only suggest doubling on hit if it's a reasonable double situation (9-11, or soft hands)
+            // Never double on weak hands like 12-16 vs strong dealer cards (7-A)
             if (baseAction === 'hit' && canDouble && runningCount >= 2) {
-                // With positive count, prefer doubling
-                return { action: 'double', reason: `${handDesc} vs ${dealerCardDesc}: Double (positive count ${runningCount > 0 ? '+' : ''}${runningCount} favors doubling)` };
+                // Only suggest doubling if it's a reasonable double situation
+                // Don't double on weak totals (12-16) vs strong dealer cards (7-A)
+                if (playerValue >= 9 && playerValue <= 11 && dealerUpCard <= 9) {
+                    // Reasonable double situations (9-11 vs 2-9)
+                    return { action: 'double', reason: `${handDesc} vs ${dealerCardDesc}: Double (positive count ${runningCount > 0 ? '+' : ''}${runningCount} favors doubling)` };
+                }
+                // For other situations, keep the base action
             }
             return { action: baseAction, reason: `${baseReason} (count ${runningCount > 0 ? '+' : ''}${runningCount} supports this play)` };
         }
@@ -392,10 +417,16 @@ function getBasicStrategy() {
             return adjustForCount(base.action, base.reason);
         }
         if (playerValue <= 16) {
-            const base = canDouble ? 
-                { action: 'double', reason: `${handDesc} vs ${dealerCardDesc}: Double if allowed, else hit` } : 
-                { action: 'hit', reason: `${handDesc} vs ${dealerCardDesc}: Hit` };
-            return adjustForCount(base.action, base.reason);
+            // Soft 13-16: Double vs 2-6, Hit vs 7-A
+            if (dealerUpCard >= 2 && dealerUpCard <= 6) {
+                const base = canDouble ? 
+                    { action: 'double', reason: `${handDesc} vs ${dealerCardDesc}: Double` } : 
+                    { action: 'hit', reason: `${handDesc} vs ${dealerCardDesc}: Hit` };
+                return adjustForCount(base.action, base.reason);
+            } else {
+                // Dealer showing 7-A: Always hit
+                return adjustForCount('hit', `${handDesc} vs ${dealerCardDesc}: Hit`);
+            }
         }
     }
     
@@ -470,7 +501,7 @@ function getBasicStrategy() {
     return adjustForCount('hit', `${handDesc} vs ${dealerCardDesc}: Hit (always hit on 8 or less)`);
 }
 
-// Calculate recommended bet based on count
+// Calculate recommended bet based on count (using bet spread table)
 function getRecommendedBet() {
     // Calculate true count (running count / decks remaining)
     // For simplicity, we'll estimate decks remaining based on cards dealt
@@ -478,22 +509,34 @@ function getRecommendedBet() {
     const estimatedDecksRemaining = Math.max(1, (52 * numberOfDecks - cardsDealt) / 52);
     const trueCount = Math.floor(runningCount / estimatedDecksRemaining);
     
-    // Betting strategy based on true count:
-    // True count <= 0: Minimum bet
-    // True count 1-2: 2x minimum
-    // True count 3-4: 4x minimum
-    // True count 5+: 6x minimum (or max available)
+    // Bet spread based on true count (SOLO PLAY from table):
+    // TRUE <= 0: Minimum bet ($50)
+    // TRUE 1: $100
+    // TRUE 2: $300
+    // TRUE 3: $500
+    // TRUE 4: $1000
+    // TRUE 5: $1200
+    // TRUE 6: $1500
+    // TRUE 7+: $2500
     
-    let recommendedBet = MIN_BET;
+    let recommendedBet = MIN_BET; // Default to minimum
     
     if (trueCount <= 0) {
-        recommendedBet = MIN_BET;
-    } else if (trueCount >= 1 && trueCount <= 2) {
-        recommendedBet = MIN_BET * 2;
-    } else if (trueCount >= 3 && trueCount <= 4) {
-        recommendedBet = MIN_BET * 4;
-    } else if (trueCount >= 5) {
-        recommendedBet = MIN_BET * 6;
+        recommendedBet = MIN_BET; // $50
+    } else if (trueCount === 1) {
+        recommendedBet = 100;
+    } else if (trueCount === 2) {
+        recommendedBet = 300;
+    } else if (trueCount === 3) {
+        recommendedBet = 500;
+    } else if (trueCount === 4) {
+        recommendedBet = 1000;
+    } else if (trueCount === 5) {
+        recommendedBet = 1200;
+    } else if (trueCount === 6) {
+        recommendedBet = 1500;
+    } else if (trueCount >= 7) {
+        recommendedBet = 2500;
     }
     
     // Cap at balance
@@ -527,12 +570,20 @@ function updateStrategyAdvisor() {
         
         if (betRec.trueCount <= 0) {
             betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet minimum.`;
-        } else if (betRec.trueCount >= 1 && betRec.trueCount <= 2) {
-            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Slight advantage - bet 2x.`;
-        } else if (betRec.trueCount >= 3 && betRec.trueCount <= 4) {
-            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Good advantage - bet 4x.`;
+        } else if (betRec.trueCount === 1) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $100.`;
+        } else if (betRec.trueCount === 2) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $300.`;
+        } else if (betRec.trueCount === 3) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $500.`;
+        } else if (betRec.trueCount === 4) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1000.`;
+        } else if (betRec.trueCount === 5) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1200.`;
+        } else if (betRec.trueCount === 6) {
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $1500.`;
         } else {
-            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Strong advantage - bet 6x!`;
+            betReason = `Count is ${betRec.runningCount > 0 ? '+' : ''}${betRec.runningCount} (True: ${betRec.trueCount}). Bet $2500!`;
         }
         
         recommendationEl.innerHTML = `<p>💰 Recommended Bet: $${betRec.amount.toLocaleString()}</p>`;
@@ -606,12 +657,21 @@ function showMessage(text, type = '') {
     messageEl.className = `message ${type}`;
 }
 
+// Use recommended bet and place it
+function useRecommendedBet() {
+    if (gameInProgress || balance <= 0) return;
+    
+    const betRec = getRecommendedBet();
+    betAmountEl.value = betRec.amount;
+    placeBet();
+}
+
 // Place bet
 function placeBet() {
     const betAmount = parseInt(betAmountEl.value);
     
-    if (betAmount < 1) {
-        showMessage('Bet must be at least $1', 'lose');
+    if (betAmount < MIN_BET) {
+        showMessage(`Bet must be at least $${MIN_BET}`, 'lose');
         return;
     }
     
@@ -621,6 +681,7 @@ function placeBet() {
     }
 
     currentBet = betAmount;
+    insuranceBet = 0; // Reset insurance bet for new hand
     balance -= currentBet;
     gameInProgress = true;
     playerHasHit = false;
@@ -637,9 +698,47 @@ function placeBet() {
         updateUI();
         clearMessage();
         
-        // Check for blackjack
+        // Check for dealer blackjack first - must be revealed immediately
+        const dealerBlackjack = isBlackjack(dealerHand);
+        const playerBlackjack = isBlackjack(playerHand);
+        
+        if (dealerBlackjack) {
+            // Reveal dealer's hidden card immediately
+            dealerPlaying = true; // Set flag to show all dealer cards
+            updateUI();
+            
+            // Disable all player action buttons immediately
+            hitBtn.disabled = true;
+            doubleBtn.disabled = true;
+            insuranceBtn.disabled = true;
+            surrenderBtn.disabled = true;
+            standBtn.disabled = true;
+            
+            // Handle insurance payout (pays 2:1 if dealer has blackjack)
+            if (insuranceBet > 0) {
+                const insuranceWin = insuranceBet * 2;
+                balance += insuranceBet + insuranceWin; // Return bet + 2:1 payout
+                showMessage(`Insurance pays! You won $${insuranceWin.toLocaleString()}`, 'win');
+            }
+            
+            // Check if player also has blackjack
+            if (playerBlackjack) {
+                // Both have blackjack - tie (main bet is returned)
+                setTimeout(() => {
+                    endGame('tie', "Both Blackjack!");
+                }, 500);
+            } else {
+                // Only dealer has blackjack - player loses main bet (but insurance pays if taken)
+                setTimeout(() => {
+                    endGame('lose', 'Dealer Blackjack!');
+                }, 500);
+            }
+            return; // Don't allow player actions
+        }
+        
+        // Check for player blackjack (only if dealer doesn't have one)
         const playerValue = calculateHandValue(playerHand);
-        if (playerValue === 21) {
+        if (playerValue === 21 && playerHand.length === 2) {
             setTimeout(() => stand(), 800); // Auto-stand on blackjack
         }
     }, 300);
@@ -663,6 +762,7 @@ function hit() {
         setTimeout(() => stand(), 300);
     }
 }
+
 
 // Double down (double bet, take one card, end turn)
 function doubleDown() {
@@ -695,6 +795,42 @@ function doubleDown() {
             stand();
         }
     }, 300);
+}
+
+// Insurance (side bet when dealer shows Ace)
+function takeInsurance() {
+    if (!gameInProgress || !isDealerAce() || playerHasHit || insuranceBet > 0 || playerHand.length !== 2) return;
+    
+    // Insurance bet is up to half the original bet
+    const maxInsurance = Math.floor(currentBet / 2);
+    
+    if (balance < maxInsurance) {
+        showMessage('Insufficient balance for insurance!', 'lose');
+        return;
+    }
+    
+    // Take insurance (half of original bet)
+    insuranceBet = maxInsurance;
+    balance -= insuranceBet;
+    
+    showMessage(`Insurance bet placed: $${insuranceBet.toLocaleString()}`, 'tie');
+    updateUI();
+}
+
+// Surrender (give up hand, get half bet back)
+function surrender() {
+    if (!gameInProgress || playerHasHit || playerHand.length !== 2) return;
+    
+    // Return half the bet
+    const surrenderAmount = Math.floor(currentBet / 2);
+    balance += surrenderAmount;
+    
+    // End the game
+    gameInProgress = false;
+    dealerPlaying = false;
+    
+    showMessage(`You surrendered. Returned $${surrenderAmount.toLocaleString()}`, 'lose');
+    updateUI();
 }
 
 // Stand (player ends turn, dealer plays)
@@ -757,6 +893,12 @@ function endGame(result, message) {
     gameInProgress = false;
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag when game ends
     
+    // If insurance was taken and dealer doesn't have blackjack, lose insurance bet
+    if (insuranceBet > 0 && !isBlackjack(dealerHand)) {
+        // Insurance bet is lost (already deducted from balance)
+        // No need to do anything, it's already gone
+    }
+    
     const playerBlackjack = isBlackjack(playerHand);
     const dealerBlackjack = isBlackjack(dealerHand);
     let winAmount = 0;
@@ -791,6 +933,9 @@ function endGame(result, message) {
         showMessage(displayMessage, 'tie');
     }
     
+    // Reset insurance bet
+    insuranceBet = 0;
+    
     updateUI();
     
     if (balance <= 0) {
@@ -799,9 +944,12 @@ function endGame(result, message) {
 }
 
 // Event listeners
+useRecommendedBtn.addEventListener('click', useRecommendedBet);
 placeBetBtn.addEventListener('click', placeBet);
 hitBtn.addEventListener('click', hit);
 doubleBtn.addEventListener('click', doubleDown);
+insuranceBtn.addEventListener('click', takeInsurance);
+surrenderBtn.addEventListener('click', surrender);
 standBtn.addEventListener('click', stand);
 newGameBtn.addEventListener('click', initGame);
 
