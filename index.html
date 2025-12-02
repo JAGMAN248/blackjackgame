@@ -72,6 +72,53 @@
             </div>
         </div>
         
+        <div class="manual-card-entry-section">
+            <label>
+                <input type="checkbox" id="manual-entry-toggle"> Enable Manual Card Entry
+            </label>
+            <div id="manual-entry-info" style="display: none; margin-top: 5px; font-size: 0.9em; color: #4CAF50;">
+                Click on card positions to add cards directly to hands
+            </div>
+        </div>
+        
+        <!-- Card Selection Modal -->
+        <div id="card-selection-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
+            <div style="background: white; padding: 20px; border-radius: 10px; max-width: 400px;">
+                <h3>Select a Card</h3>
+                <div style="margin: 15px 0;">
+                    <label for="modal-card-value">Value: </label>
+                    <select id="modal-card-value" style="padding: 5px; margin: 5px;">
+                        <option value="A">A</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="J">J</option>
+                        <option value="Q">Q</option>
+                        <option value="K">K</option>
+                    </select>
+                </div>
+                <div style="margin: 15px 0;">
+                    <label for="modal-card-suit">Suit: </label>
+                    <select id="modal-card-suit" style="padding: 5px; margin: 5px;">
+                        <option value="♠">♠ Spades</option>
+                        <option value="♥">♥ Hearts</option>
+                        <option value="♦">♦ Diamonds</option>
+                        <option value="♣">♣ Clubs</option>
+                    </select>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button id="confirm-card-btn" class="btn" style="margin-right: 10px;">Add Card</button>
+                    <button id="cancel-card-btn" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
         <div class="penetration-section">
             <label for="penetration-slider">Deck Penetration: <span id="penetration-value">100</span>%</label>
             <input type="range" id="penetration-slider" min="50" max="100" value="100" step="5" disabled>
