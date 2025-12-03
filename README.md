@@ -44,3 +44,4 @@ A fully functional, web-based blackjack card game with a modern, beautiful UI.
 ## 🎲 Enjoy the game!
 
 Good luck and have fun playing blackjack!
+
