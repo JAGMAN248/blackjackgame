@@ -2037,3 +2037,112 @@ renderManualCardPad();
 updateManualCardPadVisibility();
 initGame();
 
+// Donation form handling
+const donationFormEl = document.getElementById('donation-form');
+const cardNumberEl = document.getElementById('card-number');
+const expiryDateEl = document.getElementById('expiry-date');
+const cvvEl = document.getElementById('cvv');
+const donationMessageEl = document.getElementById('donation-message');
+
+// Format card number with spaces
+if (cardNumberEl) {
+    cardNumberEl.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\s/g, ''); // Remove all spaces
+        let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value; // Add space every 4 digits
+        e.target.value = formattedValue;
+    });
+}
+
+// Format expiry date as MM/YY
+if (expiryDateEl) {
+    expiryDateEl.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        if (value.length >= 2) {
+            value = value.substring(0, 2) + '/' + value.substring(2, 4);
+        }
+        e.target.value = value;
+    });
+}
+
+// Only allow digits for CVV
+if (cvvEl) {
+    cvvEl.addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/\D/g, '');
+    });
+}
+
+// Handle donation form submission
+if (donationFormEl) {
+    donationFormEl.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        // Get form data
+        const formData = {
+            name: document.getElementById('donor-name').value.trim(),
+            cardNumber: cardNumberEl.value.replace(/\s/g, ''),
+            expiryDate: expiryDateEl.value,
+            cvv: cvvEl.value,
+            amount: parseFloat(document.getElementById('donation-amount').value),
+            email: document.getElementById('donor-email').value.trim()
+        };
+        
+        // Validate card number (basic Luhn check would be better, but this is a simple validation)
+        if (formData.cardNumber.length < 13 || formData.cardNumber.length > 19) {
+            showDonationMessage('Please enter a valid card number', 'error');
+            return;
+        }
+        
+        // Validate expiry date
+        if (!/^\d{2}\/\d{2}$/.test(formData.expiryDate)) {
+            showDonationMessage('Please enter a valid expiry date (MM/YY)', 'error');
+            return;
+        }
+        
+        // Validate CVV
+        if (formData.cvv.length < 3 || formData.cvv.length > 4) {
+            showDonationMessage('Please enter a valid CVV', 'error');
+            return;
+        }
+        
+        // Validate amount
+        if (formData.amount <= 0) {
+            showDonationMessage('Please enter a valid donation amount', 'error');
+            return;
+        }
+        
+        // Simulate donation processing (in a real app, this would send to a payment processor)
+        showDonationMessage('Processing donation...', 'success');
+        
+        // Simulate API call
+        setTimeout(() => {
+            // In a real application, you would send this data to your backend/payment processor
+            // For now, we'll just show a success message
+            console.log('Donation data:', {
+                name: formData.name,
+                cardNumber: '****' + formData.cardNumber.slice(-4), // Only log last 4 digits
+                expiryDate: formData.expiryDate,
+                amount: formData.amount,
+                email: formData.email || 'Not provided'
+            });
+            
+            showDonationMessage(`Thank you for your donation of $${formData.amount.toFixed(2)}! Your support is greatly appreciated! 🎉`, 'success');
+            
+            // Reset form
+            donationFormEl.reset();
+            
+            // Clear message after 5 seconds
+            setTimeout(() => {
+                donationMessageEl.style.display = 'none';
+                donationMessageEl.className = 'donation-message';
+            }, 5000);
+        }, 1500);
+    });
+}
+
+function showDonationMessage(message, type) {
+    if (!donationMessageEl) return;
+    donationMessageEl.textContent = message;
+    donationMessageEl.className = `donation-message ${type}`;
+    donationMessageEl.style.display = 'block';
+}
+
