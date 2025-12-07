@@ -2886,6 +2886,7 @@ function initPoker() {
     const sprBar = document.getElementById('spr-bar');
     const sprAdvice = document.getElementById('spr-advice');
     const handMatrix = document.getElementById('hand-matrix');
+    const simpleToggle = document.getElementById('poker-simple-toggle');
     const strategyAction = document.getElementById('strategy-action');
     const strategyFrequencies = document.getElementById('strategy-frequencies');
     const strategySizing = document.getElementById('strategy-sizing');
@@ -3059,6 +3060,63 @@ function initPoker() {
     // Update SPR on input change
     if (pokerStack) pokerStack.addEventListener('input', updateSPR);
     if (pokerPot) pokerPot.addEventListener('input', updateSPR);
+
+    // Simple view toggle (hide matrix for faster decisions)
+    if (simpleToggle && handMatrix) {
+        simpleToggle.addEventListener('change', () => {
+            if (simpleToggle.checked) {
+                handMatrix.closest('.poker-matrix').style.display = 'none';
+            } else {
+                handMatrix.closest('.poker-matrix').style.display = 'block';
+            }
+        });
+    }
+
+    // Board texture assessment for more nuanced advice
+    const rankValue = { 'A':14,'K':13,'Q':12,'J':11,'T':10,'9':9,'8':8,'7':7,'6':6,'5':5,'4':4,'3':3,'2':2 };
+    function getBoardTexture(boardCards) {
+        const ranksSeen = {};
+        const suitsSeen = {};
+        boardCards.forEach(c => {
+            if (!c) return;
+            ranksSeen[c.rank] = (ranksSeen[c.rank] || 0) + 1;
+            suitsSeen[c.suit] = (suitsSeen[c.suit] || 0) + 1;
+        });
+        const values = boardCards.filter(Boolean).map(c => rankValue[c.rank]).sort((a,b)=>a-b);
+        let paired = false, trips = false, quads = false;
+        Object.values(ranksSeen).forEach(v => {
+            if (v === 2) paired = true;
+            if (v === 3) trips = true;
+            if (v === 4) quads = true;
+        });
+        const maxSuit = Math.max(0, ...Object.values(suitsSeen));
+        const twoTone = maxSuit === 2;
+        const flushDraw = maxSuit >= 3;
+        // Straight draw potential on board
+        let straighty = false;
+        for (let i = 0; i < values.length - 2; i++) {
+            if (values[i+2] - values[i] <= 4) straighty = true;
+        }
+        return { paired, trips, quads, twoTone, flushDraw, straighty };
+    }
+
+    function categorizeHand(hole, board) {
+        if (hole.length < 2) return 'unknown';
+        const ranksOnly = board.filter(Boolean).map(c => c.rank);
+        const fullRanks = [...ranksOnly, hole[0].rank, hole[1].rank];
+        const counts = {};
+        fullRanks.forEach(r => counts[r] = (counts[r] || 0) + 1);
+        const hasTripsPlus = Object.values(counts).some(v => v >= 3);
+        const hasPair = Object.values(counts).some(v => v === 2);
+        const boardTexture = getBoardTexture(board);
+        if (boardTexture.quads || boardTexture.trips) {
+            if (hasTripsPlus && boardTexture.trips === false) return 'strong';
+        }
+        if (hasTripsPlus) return 'strong';
+        if (hasPair && boardTexture.paired) return 'marginal';
+        if (hasPair) return 'medium';
+        return 'weak';
+    }
     
     // GTO Range Calculator
     function getGTORange(heroPos, villainPos, actionHistory, spr) {
@@ -3119,6 +3177,7 @@ function initPoker() {
         const stack = parseFloat(pokerStack?.value) || 100;
         const pot = parseFloat(pokerPot?.value) || 20;
         const spr = pot > 0 ? stack / pot : 0;
+        const handCategory = categorizeHand(selectedHoleCards, selectedBoardCards);
         
         // Update matrix
         updateHandMatrix(heroPos, villainPos, actionHistory, spr);
@@ -3148,41 +3207,41 @@ function initPoker() {
             if (villainAction === 'check') {
                 if (inRaise) {
                     action = 'BET';
-                    betFreq = 65;
-                    checkFreq = 35;
+                    betFreq = handCategory === 'strong' ? 75 : 55;
+                    checkFreq = 100 - betFreq;
                     foldFreq = 0;
-                    betSize = spr < 3 ? 0.5 : spr < 6 ? 0.33 : 0.33;
-                    context = 'Villain checked. Take initiative with value bets and protection bets.';
+                    betSize = spr < 3 ? 0.5 : 0.33;
+                    context = 'Villain checked. Bet for value/protection; check back some bluff-catchers.';
                 } else if (inCall) {
                     action = 'CHECK';
-                    betFreq = 25;
-                    checkFreq = 75;
+                    betFreq = handCategory === 'medium' ? 20 : 10;
+                    checkFreq = 100 - betFreq;
                     foldFreq = 0;
                     betSize = 0.33;
-                    context = 'Villain checked. Check back a lot; bet small occasionally for protection.';
+                    context = 'Villain checked. Realize equity; occasional small bets for protection.';
                 } else {
                     action = 'CHECK';
                     betFreq = 0;
                     checkFreq = 100;
                     foldFreq = 0;
                     betSize = 0;
-                    context = 'Out of range hand. Take the free card; do not fold when Villain checks.';
+                    context = 'Out of range hand. Take the free card; never fold to a check.';
                 }
             } else if (villainAction === 'bet33') {
                 if (inRaise) {
-                    action = 'RAISE';
-                    betFreq = 90;
-                    checkFreq = 0;
-                    foldFreq = 10;
-                    betSize = 0.9; // raise to ~3x vs 1/3 pot
-                    context = 'Facing 1/3 pot. Raise your strong value; mix some calls with mid-strength.';
+                    action = handCategory === 'strong' ? 'RAISE' : 'CALL';
+                    betFreq = handCategory === 'strong' ? 80 : 0;
+                    checkFreq = handCategory === 'strong' ? 0 : 80;
+                    foldFreq = handCategory === 'strong' ? 20 : 20;
+                    betSize = handCategory === 'strong' ? 0.9 : 0.33;
+                    context = 'Facing 1/3 pot. Raise strong value; call mid-strength; fold bottom.';
                 } else if (inCall) {
                     action = 'CALL';
                     betFreq = 0;
-                    checkFreq = 80; // treating call as neutral line
-                    foldFreq = 20;
+                    checkFreq = 75;
+                    foldFreq = 25;
                     betSize = 0.33;
-                    context = 'Facing 1/3 pot. Call with middling range; fold weakest combos.';
+                    context = 'Facing 1/3 pot. Defend with your call range; fold weakest combos.';
                 } else {
                     action = 'FOLD';
                     betFreq = 0;
@@ -3195,17 +3254,17 @@ function initPoker() {
                 if (inRaise) {
                     action = 'CALL';
                     betFreq = 0;
-                    checkFreq = 70;
-                    foldFreq = 30;
+                    checkFreq = 65;
+                    foldFreq = 35;
                     betSize = 0.75;
-                    context = 'Facing 3/4 pot. Call strong value; avoid over-bluffing. Some folds are fine.';
+                    context = 'Facing 3/4 pot. Call strong value; trim the bottom of your range.';
                 } else if (inCall) {
                     action = 'CALL';
                     betFreq = 0;
-                    checkFreq = 40;
-                    foldFreq = 60;
+                    checkFreq = 45;
+                    foldFreq = 55;
                     betSize = 0.75;
-                    context = 'Facing 3/4 pot. Call the top of your call range; fold the bottom.';
+                    context = 'Facing 3/4 pot. Defend the top of your call range; fold the rest.';
                 } else {
                     action = 'FOLD';
                     betFreq = 0;
@@ -3218,10 +3277,10 @@ function initPoker() {
                 if (inRaise) {
                     action = 'CALL';
                     betFreq = 0;
-                    checkFreq = 50;
-                    foldFreq = 50;
+                    checkFreq = 40;
+                    foldFreq = 60;
                     betSize = 1;
-                    context = 'Facing jam. Call only with top of range; fold marginal hands.';
+                    context = 'Facing jam. Call only the top of range; fold marginal hands.';
                 } else {
                     action = 'FOLD';
                     betFreq = 0;
