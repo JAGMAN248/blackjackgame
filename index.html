@@ -7,11 +7,33 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="sidebar-container">
-        <div class="strategy-advisor" id="strategy-advisor">
-            <div class="advisor-header">
-                <h3>🎯 Strategy Advisor</h3>
-            </div>
+    <!-- Header / Profile -->
+    <div class="app-header">
+        <div id="user-profile-display" class="profile-display" style="display: none;">
+            <span>👤 <span id="profile-name">Tyler</span></span>
+            <button id="logout-btn" class="btn-text">Sign Out</button>
+        </div>
+        <button id="login-btn" class="btn-text" style="display: none;">Sign In</button>
+    </div>
+
+    <!-- Main Tab Navigation -->
+    <nav class="main-tabs">
+        <button class="tab-btn active" data-tab="tab-wash">🃏 Blackjack</button>
+        <button class="tab-btn" data-tab="tab-sports">🏈 Sportsbook</button>
+        <button class="tab-btn" data-tab="tab-craps">🎲 Craps</button>
+        <button class="tab-btn" data-tab="tab-poker">♠️ Poker</button>
+        <button class="tab-btn" data-tab="tab-health">❤️ Health</button>
+        <button class="tab-btn" data-tab="tab-guide">📚 Guide</button>
+    </nav>
+
+    <main class="tab-content">
+        <!-- Tab 1: The Wash Counter (Existing Game) -->
+        <div id="tab-wash" class="tab-pane active">
+            <div class="sidebar-container">
+                <div class="strategy-advisor" id="strategy-advisor">
+                    <div class="advisor-header">
+                        <h3>🎯 Strategy Advisor</h3>
+                    </div>
             <div class="advisor-content">
                 <div class="recommendation" id="recommendation">
                     <p>Place a bet to get strategy advice</p>
@@ -180,9 +202,270 @@
 
         <div class="message" id="message"></div>
     </div>
+    </div> <!-- End of tab-wash -->
 
-    <!-- Right Side Donation Panel -->
-    <div class="donation-sidebar">
+    <!-- Tab 2: Game Scanner -->
+    <div id="tab-scanner" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>🔍 Game Scanner</h2>
+            <p>Analyze game rules to determine wash suitability.</p>
+            
+            <div class="scanner-form">
+                <div class="form-group">
+                    <label>Blackjack Payout</label>
+                    <select id="scan-payout">
+                        <option value="1.5">3:2 (Standard)</option>
+                        <option value="1.2">6:5 (Trap)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Dealer Soft 17</label>
+                    <select id="scan-soft17">
+                        <option value="stand">Stands</option>
+                        <option value="hit">Hits</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Shuffle Type</label>
+                    <select id="scan-shuffle">
+                        <option value="shoe">Shoe (4-8 Decks)</option>
+                        <option value="csm">Continuous (CSM)</option>
+                    </select>
+                </div>
+                <div id="scanner-result" class="scanner-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 3: Health Dashboard -->
+    <div id="tab-health" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>❤️ Current Session Stats</h2>
+            <p>Monitor your "Wash" metrics for this specific session.</p>
+            
+            <div class="health-stats">
+                <div class="stat-box">
+                    <label>Session Deposited</label>
+                    <input type="number" id="health-deposit" value="0">
+                </div>
+                <div class="stat-box">
+                    <label>Session Casino Play</label>
+                    <input type="number" id="health-casino" value="0">
+                </div>
+                <div class="stat-box">
+                    <label>Session Sports Play</label>
+                    <input type="number" id="health-sports" value="0">
+                </div>
+                <div class="stat-box">
+                    <label>Session Withdrawn</label>
+                    <input type="number" id="health-withdraw" value="0">
+                </div>
+            </div>
+            <div id="health-status" class="health-status"></div>
+        </div>
+    </div>
+
+    <!-- Tab 2: Sportsbook (The Migrator) -->
+    <div id="tab-sports" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>🏈 Sportsbook Migrator</h2>
+            <p>Analyze odds, hedge costs, and build camouflage parlays.</p>
+            
+            <div class="parlay-calc">
+                <!-- API Integration Section -->
+                <div class="api-section" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="font-size: 1em; color: #cbd5e1; margin-bottom: 10px;">🔥 Live Opportunities</h3>
+                    <button id="fetch-odds-btn" class="btn" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width: 100%;">Fetch High-Value Parlays</button>
+                    <div id="api-odds-result" class="api-result" style="margin-top: 10px; display: none;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Event A Odds (Decimal)</label>
+                    <input type="number" id="parlay-odds-a" step="0.01" placeholder="1.91">
+                </div>
+                <div class="form-group">
+                    <label>Event B Odds (Decimal)</label>
+                    <input type="number" id="parlay-odds-b" step="0.01" placeholder="1.91">
+                </div>
+                <button id="calc-parlay-btn" class="btn btn-small">Calculate Camouflage Value</button>
+                <div id="parlay-result" class="parlay-result"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Tab 3: Craps (The Shield) -->
+    <div id="tab-craps" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>🎲 Craps Odds Optimizer</h2>
+            <p>Maximize your 0% House Edge bets (The "Dark Side").</p>
+            
+            <div class="scanner-form">
+                <div class="form-group">
+                    <label>Bankroll ($)</label>
+                    <input type="number" id="craps-bankroll" value="500">
+                </div>
+                <div class="form-group">
+                    <label>Base Bet ($)</label>
+                    <input type="number" id="craps-base-bet" value="10">
+                </div>
+                <div class="form-group">
+                    <label>Point Number</label>
+                    <select id="craps-point">
+                        <option value="4">4 or 10</option>
+                        <option value="5">5 or 9</option>
+                        <option value="6">6 or 8</option>
+                    </select>
+                </div>
+                <button id="calc-craps-btn" class="btn btn-small">Calculate Lay Odds</button>
+                <div id="craps-result" class="scanner-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 4: Poker Assistant (The Mask) -->
+    <div id="tab-poker" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>♠️ Poker Assistant</h2>
+            <p>Make GTO decisions to look like a skilled human.</p>
+            
+            <div class="scanner-form">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 10px;">SPR Calculator</h3>
+                <div class="form-group">
+                    <label>Effective Stack ($)</label>
+                    <input type="number" id="poker-stack" value="100">
+                </div>
+                <div class="form-group">
+                    <label>Pot Size ($)</label>
+                    <input type="number" id="poker-pot" value="20">
+                </div>
+                <button id="calc-poker-btn" class="btn btn-small">Calculate Strategy</button>
+                <div id="poker-result" class="scanner-result"></div>
+                
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-top: 20px; margin-bottom: 10px;">Pre-Flop Ranges</h3>
+                <div class="poker-ranges">
+                    <button class="btn btn-small range-btn" data-pos="UTG">UTG</button>
+                    <button class="btn btn-small range-btn" data-pos="HJ">HJ</button>
+                    <button class="btn btn-small range-btn" data-pos="CO">CO</button>
+                    <button class="btn btn-small range-btn" data-pos="BTN">BTN</button>
+                    <button class="btn btn-small range-btn" data-pos="SB">SB</button>
+                    <button class="btn btn-small range-btn" data-pos="BB">BB</button>
+                </div>
+                <div id="range-display" class="range-display" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Tab 5: Guide -->
+    <div id="tab-guide" class="tab-pane">
+        <div class="dashboard-container">
+            <h2>📚 The Money Flow: Engine & Camouflage</h2>
+            <div class="guide-content">
+                <div class="guide-section">
+                    <h3>The Core Concept</h3>
+                    <p>You are building a machine with two distinct parts: <strong>The Engine (Casino)</strong> and <strong>The Camouflage (Sportsbook)</strong>.</p>
+                    <p style="color: #f87171;"><strong>CRITICAL RULE:</strong> NEVER withdraw directly from the Sportsbook. This triggers limits.</p>
+                </div>
+
+                <div class="guide-section">
+                    <h3>1. The Engine (Casino) = "Money Printer"</h3>
+                    <p><strong>Goal:</strong> Unlock +5% Gift Card profit & clear deposit bonuses.</p>
+                    <ul>
+                        <li><strong>Game:</strong> IGT Video Blackjack (RNG).</li>
+                        <li><strong>Strategy:</strong> Use Tab 1 "Wash Mode" (Perfect Basic Strategy).</li>
+                        <li><strong>Risk:</strong> Extremely Low (~0.5% House Edge).</li>
+                        <li><strong>Result:</strong> Generates "Clean Cash" & Credit Card Points. High Volume/Turnover is good here.</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>2. The Incubator (Sportsbook) = "Camouflage"</h3>
+                    <p><strong>Goal:</strong> Look like a "Square" (bad gambler) who loves long-shot parlays. Fixes Withdrawal-to-Play ratio.</p>
+                    <ul>
+                        <li><strong>Action:</strong> Transfer CASINO PROFITS here. Do NOT withdraw.</li>
+                        <li><strong>Strategy:</strong> Bet on Systematic Parlays (High Odds, High Variance).</li>
+                        <li><strong>Outcome A (Lose):</strong> Algorithm sends bonuses. (Good).</li>
+                        <li><strong>Outcome B (Win):</strong> "High Variance" winnings look less suspicious.</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>The Flow Chart (Step-by-Step)</h3>
+                    <ol style="padding-left: 20px; color: #cbd5e1;">
+                        <li><strong>Input:</strong> Credit Card -> Gift Card (+5%) -> Deposit to FanDuel.</li>
+                        <li><strong>The Wash:</strong> Play 1x through on Casino Video BJ (Tab 1). Funds are now "Clean".</li>
+                        <li><strong>The Transfer:</strong> Move Profits to Sportsbook wallet.</li>
+                        <li><strong>Camouflage Bet:</strong> Place a high-odds parlay (e.g. +600). Hedge at another book (Pinnacle).</li>
+                        <li><strong>The Exit (Scenario A - Lose on FD):</strong> Best case. Money is gone from FD, doubled in Pinnacle. Withdraw from Pinnacle.</li>
+                        <li><strong>The Exit (Scenario B - Win on FD):</strong> Transfer winnings BACK to Casino. Play 15 min "Cool Down" slots/BJ. Withdraw from Casino.</li>
+                    </ol>
+                </div>
+                
+                <div id="guide-next-steps" class="guide-next-steps" style="display: none;">
+                    <h3>🚀 Your Next Best Step</h3>
+                    <div id="guide-recommendation-text">Sign in to see personalized recommendations.</div>
+                    <button id="guide-action-btn" class="btn btn-small" style="margin-top: 10px;">Go to Action</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <!-- Guide Overlay -->
+    <div id="guide-overlay" class="guide-overlay" style="display: none;">
+        <div class="guide-overlay-header">
+            <h3>🚀 Next Step</h3>
+            <button id="close-guide-overlay" class="btn-icon">×</button>
+        </div>
+        <div id="overlay-rec-text">Loading recommendation...</div>
+        <button id="overlay-action-btn" class="btn btn-small">Go</button>
+    </div>
+
+    <!-- Profile Stats Modal -->
+    <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 500px;">
+            <h2>👤 Lifetime Account Stats</h2>
+            <p>Your overall historical data (persists across sessions).</p>
+            
+            <div class="health-stats">
+                <div class="stat-box">
+                    <label>Total Deposited</label>
+                    <input type="number" id="profile-deposit" readonly>
+                </div>
+                <div class="stat-box">
+                    <label>Lifetime Casino</label>
+                    <input type="number" id="profile-casino" readonly>
+                </div>
+                <div class="stat-box">
+                    <label>Lifetime Sports</label>
+                    <input type="number" id="profile-sports" readonly>
+                </div>
+                <div class="stat-box">
+                    <label>Total Withdrawn</label>
+                    <input type="number" id="profile-withdraw" readonly>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                <button id="profile-close-btn" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px;">
+            <h2>👤 Sign In</h2>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="login-username" placeholder="Enter username">
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button id="modal-login-btn" class="btn">Login</button>
+                <button id="modal-cancel-btn" class="btn" style="background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Side Donation Panel (hidden until coffee button is pressed) -->
+    <div class="donation-sidebar" style="display: none;">
         <div class="donation-panel" id="donation-panel">
             <div class="donation-header">
                 <h3>💝 Support the Game</h3>
@@ -225,6 +508,7 @@
 
     <!-- Bottom Left Logo Sidebar -->
     <div class="logo-sidebar">
+        <a class="logo-coffee" aria-label="Support the game" href="#donation-panel">☕</a>
         <div class="logo-container">
             <div class="logo">♠️</div>
             <div class="logo-text">Blackjack</div>
