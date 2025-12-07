@@ -60,6 +60,7 @@ const penetrationValueEl = document.getElementById('penetration-value');
 const manualEntryToggleEl = document.getElementById('manual-entry-toggle');
 const manualEntryInfoEl = document.getElementById('manual-entry-info');
 const cardSelectionModalEl = document.getElementById('card-selection-modal');
+const manualCardPadEl = document.getElementById('manual-card-pad');
 const modalCardValueEl = document.getElementById('modal-card-value');
 const modalCardSuitEl = document.getElementById('modal-card-suit');
 const confirmCardBtnEl = document.getElementById('confirm-card-btn');
@@ -98,6 +99,7 @@ function initGame() {
     updateCardHistory();
     updateCardsRemaining();
     updateUI();
+    updateManualCardPadVisibility();
     clearMessage();
 }
 
@@ -219,6 +221,31 @@ function removeCardFromDeck(suit, value) {
     return false;
 }
 
+// Burn a card from the shoe without adding it to any hand (manual pad quick entry)
+function burnCardFromShoe(suit, value) {
+    const removed = removeCardFromDeck(suit, value);
+    if (!removed) {
+        showMessage(`Card ${value}${suit} is not available in the deck!`, 'lose');
+        return;
+    }
+    const countDelta = getCardCountValue({ value });
+    runningCount += countDelta;
+    updateCountDisplay();
+    updateCardsRemaining();
+
+    // Track in history (respect suits if enabled)
+    if (suitsModeEnabled) {
+        cardHistory.push({ value, suit, count: countDelta });
+    } else {
+        cardHistory.push({ value, count: countDelta });
+    }
+    if (cardHistory.length > MAX_HISTORY) {
+        cardHistory.shift();
+    }
+    updateCardHistory();
+    showMessage(`Burned ${value}${suit} from the shoe (count ${countDelta > 0 ? '+' : ''}${countDelta})`, 'tie');
+}
+
 // Deal a card from the deck (only used when manual entry is disabled)
 function dealCard() {
     // Check if we've reached penetration limit
@@ -250,6 +277,75 @@ function hideCardSelectionModal() {
     if (cardSelectionModalEl) {
         cardSelectionModalEl.style.display = 'none';
     }
+}
+
+// Render the manual card touchpad buttons
+function renderManualCardPad() {
+    if (!manualCardPadEl) return;
+    manualCardPadEl.innerHTML = '';
+    const defaultSuit = selectedSuit || '♠';
+    const groups = [
+        { label: 'Low Cards (+1)', values: ['2','3','4','5','6'] },
+        { label: 'Neutral (0)', values: ['7','8','9'] },
+        { label: 'High Cards (-1)', values: ['10','J','Q','K','A'] },
+    ];
+
+    const makeCardButton = (val) => {
+        const suit = selectedSuit || defaultSuit;
+        const isRed = suit === '♥' || suit === '♦';
+        const btn = document.createElement('button');
+        btn.className = `card-pad-button ${isRed ? 'red' : 'black'}`;
+        btn.setAttribute('data-suit', suit);
+        btn.setAttribute('data-value', val);
+
+        const cardFace = document.createElement('div');
+        cardFace.className = `card-pad-card ${isRed ? 'red' : 'black'}`;
+        const top = document.createElement('div');
+        top.className = 'corner';
+        top.textContent = val;
+        const center = document.createElement('div');
+        center.className = 'suit';
+        center.textContent = suit;
+        const bottom = document.createElement('div');
+        bottom.className = 'corner bottom';
+        bottom.textContent = val;
+        cardFace.appendChild(top);
+        cardFace.appendChild(center);
+        cardFace.appendChild(bottom);
+        btn.appendChild(cardFace);
+
+        btn.addEventListener('click', () => {
+            if (!manualEntryEnabled) {
+                showMessage('Enable manual entry first.', 'lose');
+                return;
+            }
+            // Touchpad now burns a card from the shoe without placing it in hands
+            burnCardFromShoe(suit, val);
+        });
+
+        return btn;
+    };
+
+    groups.forEach(group => {
+        const block = document.createElement('div');
+        block.className = 'card-pad-suit';
+        const label = document.createElement('div');
+        label.className = 'suit-label';
+        label.textContent = group.label;
+        block.appendChild(label);
+
+        const row = document.createElement('div');
+        row.className = 'card-pad-row';
+        group.values.forEach(val => row.appendChild(makeCardButton(val)));
+
+        block.appendChild(row);
+        manualCardPadEl.appendChild(block);
+    });
+}
+
+function updateManualCardPadVisibility() {
+    if (!manualCardPadEl) return;
+    manualCardPadEl.style.display = manualEntryEnabled ? 'grid' : 'none';
 }
 
 // Check for blackjack after manual cards are added (when initial 2 cards are in place)
@@ -1645,7 +1741,7 @@ if (penetrationSliderEl) {
 
 // Allow Enter key to place bet
 betAmountEl.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !placeBetBtn.disabled) {
+    if (e.key === 'Enter') {
         placeBet();
     }
 });
@@ -1661,6 +1757,7 @@ if (manualEntryToggleEl) {
         if (cardCountTrackerEl) {
             cardCountTrackerEl.style.display = manualEntryEnabled ? 'block' : 'none';
         }
+        updateManualCardPadVisibility();
         if (!manualEntryEnabled) {
             currentManualTarget = null;
             hideCardSelectionModal();
@@ -1764,7 +1861,11 @@ if (suitsModeToggleEl) {
         // Set default suit if enabling
         if (suitsModeEnabled && suitSelectorEl) {
             selectedSuit = suitSelectorEl.value;
+        } else {
+            // When disabling suits mode, clear selected suit (fallback to default)
+            selectedSuit = null;
         }
+        renderManualCardPad();
     });
 }
 
@@ -1772,6 +1873,7 @@ if (suitsModeToggleEl) {
 if (suitSelectorEl) {
     suitSelectorEl.addEventListener('change', (e) => {
         selectedSuit = e.target.value;
+        renderManualCardPad();
     });
 }
 
@@ -1931,5 +2033,7 @@ if (penetrationValueEl) {
 document.getElementById('min-bet').textContent = MIN_BET;
 betAmountEl.min = MIN_BET;
 betAmountEl.value = MIN_BET;
+renderManualCardPad();
+updateManualCardPadVisibility();
 initGame();
 

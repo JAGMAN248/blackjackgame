@@ -753,6 +753,7 @@ header h1 {
     background: rgba(255, 255, 255, 0.1);
     outline: none;
     -webkit-appearance: none;
+    appearance: none;
 }
 
 .penetration-section input[type="range"]::-webkit-slider-thumb {
@@ -1015,6 +1016,106 @@ header h1 {
     
     .logo-text {
         font-size: 10px;
+    }
+}
+
+/* Manual card touchpad (also used for count tracker buttons) */
+.manual-card-pad {
+    margin-top: 20px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    display: grid;
+    gap: 10px;
+}
+
+.card-pad-suit {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.card-pad-suit .suit-label {
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.card-pad-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(32px, 1fr));
+    gap: 6px;
+}
+
+.card-pad-button {
+    padding: 4px;
+    border: none;
+    background: transparent;
+    display: block;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.card-pad-button:hover {
+    transform: translateY(-1px) scale(1.02);
+}
+
+.card-pad-card {
+    width: 48px;
+    height: 68px;
+    border-radius: 8px;
+    background: #f9fafb;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    border: 1px solid rgba(0,0,0,0.08);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    align-items: center;
+    justify-items: center;
+    color: #0f172a;
+    font-weight: 700;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-pad-card .corner {
+    font-size: 12px;
+    padding: 4px;
+    align-self: start;
+    justify-self: start;
+}
+
+.card-pad-card .corner.bottom {
+    transform: rotate(180deg);
+    align-self: end;
+    justify-self: end;
+}
+
+.card-pad-card .suit {
+    font-size: 16px;
+}
+
+.card-pad-card.red {
+    color: #c81e1e;
+}
+
+.card-pad-card.black {
+    color: #0f172a;
+}
+
+@media (max-width: 1024px) {
+    .card-pad-row {
+        grid-template-columns: repeat(5, minmax(32px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .manual-card-pad {
+        padding: 10px;
+    }
+    .card-pad-row {
+        grid-template-columns: repeat(4, minmax(28px, 1fr));
     }
 }
 
