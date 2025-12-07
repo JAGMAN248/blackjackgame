@@ -2887,6 +2887,7 @@ function initPoker() {
     const sprAdvice = document.getElementById('spr-advice');
     const handMatrix = document.getElementById('hand-matrix');
     const simpleToggle = document.getElementById('poker-simple-toggle');
+    const autoToggle = document.getElementById('poker-auto-toggle');
     const strategyAction = document.getElementById('strategy-action');
     const strategyFrequencies = document.getElementById('strategy-frequencies');
     const strategySizing = document.getElementById('strategy-sizing');
@@ -3023,6 +3024,7 @@ function initPoker() {
             const stack = parseFloat(btn.dataset.stack);
             if (pokerStack) pokerStack.value = stack;
             updateSPR();
+            maybeAutoUpdate();
         });
     });
     
@@ -3058,8 +3060,8 @@ function initPoker() {
     }
     
     // Update SPR on input change
-    if (pokerStack) pokerStack.addEventListener('input', updateSPR);
-    if (pokerPot) pokerPot.addEventListener('input', updateSPR);
+    if (pokerStack) pokerStack.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
+    if (pokerPot) pokerPot.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
 
     // Simple view toggle (hide matrix for faster decisions)
     if (simpleToggle && handMatrix) {
@@ -3071,6 +3073,65 @@ function initPoker() {
             }
         });
     }
+
+    // Auto calc helper
+    function maybeAutoUpdate() {
+        if (!autoToggle || autoToggle.checked) {
+            updateStrategy();
+        }
+    }
+
+    // Quick hole cards / board buttons
+    function setHoleFromString(str) {
+        if (!str || str.length < 4) return;
+        const c1 = { rank: str[0], suit: str[1], color: suitColors[str[1]] === 'red' ? 'red' : 'black' };
+        const c2 = { rank: str[2], suit: str[3], color: suitColors[str[3]] === 'red' ? 'red' : 'black' };
+        selectedHoleCards[0] = c1;
+        selectedHoleCards[1] = c2;
+        renderCard(document.getElementById('hole-card-1'), c1);
+        renderCard(document.getElementById('hole-card-2'), c2);
+        maybeAutoUpdate();
+    }
+
+    function setBoardFromString(str) {
+        selectedBoardCards = [];
+        const slots = document.querySelectorAll('.board-card');
+        slots.forEach(s => {
+            s.innerHTML = '<div class="card-placeholder">' + (s.dataset.index < 3 ? `Flop ${parseInt(s.dataset.index)+1}` : s.dataset.index === "3" ? 'Turn' : 'River') + '</div>';
+            s.classList.remove('selected');
+        });
+        if (!str) { maybeAutoUpdate(); return; }
+        const cards = [];
+        for (let i = 0; i < str.length; i += 2) {
+            const r = str[i];
+            const su = str[i+1];
+            if (!r || !su) break;
+            cards.push({ rank: r, suit: su, color: suitColors[su] === 'red' ? 'red' : 'black' });
+        }
+        cards.slice(0,5).forEach((c, idx) => {
+            selectedBoardCards[idx] = c;
+            const slot = document.querySelector(`.board-card[data-index="${idx}"]`);
+            if (slot) renderCard(slot, c);
+        });
+        maybeAutoUpdate();
+    }
+
+    document.querySelectorAll('.quick-btn[data-hole]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const str = btn.dataset.hole;
+            if (str === 'AsKs') {
+                setHoleFromString('AsKs');
+            } else {
+                setHoleFromString(str);
+            }
+        });
+    });
+
+    document.querySelectorAll('.quick-btn[data-board]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            setBoardFromString(btn.dataset.board);
+        });
+    });
 
     // Board texture assessment for more nuanced advice
     const rankValue = { 'A':14,'K':13,'Q':12,'J':11,'T':10,'9':9,'8':8,'7':7,'6':6,'5':5,'4':4,'3':3,'2':2 };
@@ -3359,9 +3420,9 @@ function initPoker() {
     // Update on input changes
     ['poker-hero-pos', 'poker-villain-pos', 'poker-action-history'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('change', updateStrategy);
+        if (el) el.addEventListener('change', maybeAutoUpdate);
     });
-    if (villainActionSelect) villainActionSelect.addEventListener('change', updateStrategy);
+    if (villainActionSelect) villainActionSelect.addEventListener('change', maybeAutoUpdate);
     
     // Initialize
     buildHandMatrix();

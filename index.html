@@ -331,6 +331,10 @@
                     <input type="checkbox" id="poker-simple-toggle">
                     <span>Simple View (hide matrix, show core action)</span>
                 </label>
+                <label class="toggle-simple" style="margin-left: 16px;">
+                    <input type="checkbox" id="poker-auto-toggle" checked>
+                    <span>Auto-calc on change</span>
+                </label>
             </div>
             
             <div class="poker-layout">
@@ -375,6 +379,12 @@
                     
                     <div class="poker-section">
                         <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 2: Hole Cards</h3>
+                        <div class="quick-row">
+                            <button class="quick-btn" data-hole="AsKs">AA/KK+</button>
+                            <button class="quick-btn" data-hole="AdKc">AKo</button>
+                            <button class="quick-btn" data-hole="9h8h">98s</button>
+                            <button class="quick-btn" data-hole="Jc3s">J3o</button>
+                        </div>
                         <div class="card-selector">
                             <div class="card-slot" id="hole-card-1">
                                 <div class="card-placeholder">Card 1</div>
@@ -390,6 +400,12 @@
                     
                     <div class="poker-section">
                         <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 3: Board</h3>
+                        <div class="quick-row">
+                            <button class="quick-btn" data-board="Ah7d2c">Dry A72r</button>
+                            <button class="quick-btn" data-board="KsKd4s">Paired K K 4</button>
+                            <button class="quick-btn" data-board="JsTs9s">Wet J T 9 ss</button>
+                            <button class="quick-btn" data-board="">Clear</button>
+                        </div>
                         <div class="board-cards">
                             <div class="card-slot board-card" data-street="flop" data-index="0">
                                 <div class="card-placeholder">Flop 1</div>

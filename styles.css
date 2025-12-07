@@ -1668,6 +1668,29 @@ header h1 {
     accent-color: #3b82f6;
 }
 
+.quick-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.quick-btn {
+    padding: 6px 10px;
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.82em;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-btn:hover {
+    background: rgba(59, 130, 246, 0.32);
+    transform: translateY(-1px);
+}
+
 .poker-inputs {
     background: rgba(0, 0, 0, 0.3);
     padding: 20px;
