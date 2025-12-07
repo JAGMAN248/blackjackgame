@@ -323,33 +323,147 @@
 
     <!-- Tab 4: Poker Assistant (The Mask) -->
     <div id="tab-poker" class="tab-pane">
-        <div class="dashboard-container">
-            <h2>♠️ Poker Assistant</h2>
-            <p>Make GTO decisions to look like a skilled human.</p>
+        <div class="dashboard-container" style="max-width: 1400px;">
+            <h2>♠️ GTO Poker Assistant</h2>
+            <p style="color: #94a3b8; margin-bottom: 20px;">Optimized for PokerStars Ontario players. Make mathematically correct decisions.</p>
             
-            <div class="scanner-form">
-                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 10px;">SPR Calculator</h3>
-                <div class="form-group">
-                    <label>Effective Stack ($)</label>
-                    <input type="number" id="poker-stack" value="100">
+            <div class="poker-layout">
+                <!-- Left Column: Inputs -->
+                <div class="poker-inputs">
+                    <div class="poker-section">
+                        <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 1: Game State</h3>
+                        
+                        <div class="form-group">
+                            <label>Action History</label>
+                            <select id="poker-action-history" class="form-control">
+                                <option value="srp">Single Raised Pot (SRP)</option>
+                                <option value="3bet">3-Bet Pot</option>
+                                <option value="4bet">4-Bet Pot</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Hero Position</label>
+                            <select id="poker-hero-pos" class="form-control">
+                                <option value="UTG">UTG</option>
+                                <option value="HJ">HJ</option>
+                                <option value="CO">CO</option>
+                                <option value="BTN">BTN</option>
+                                <option value="SB">SB</option>
+                                <option value="BB">BB</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Villain Position</label>
+                            <select id="poker-villain-pos" class="form-control">
+                                <option value="UTG">UTG</option>
+                                <option value="HJ">HJ</option>
+                                <option value="CO">CO</option>
+                                <option value="BTN">BTN</option>
+                                <option value="SB">SB</option>
+                                <option value="BB">BB</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="poker-section">
+                        <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 2: Hole Cards</h3>
+                        <div class="card-selector">
+                            <div class="card-slot" id="hole-card-1">
+                                <div class="card-placeholder">Card 1</div>
+                            </div>
+                            <div class="card-slot" id="hole-card-2">
+                                <div class="card-placeholder">Card 2</div>
+                            </div>
+                        </div>
+                        <div id="card-selector-modal" class="card-selector-modal" style="display: none;">
+                            <div class="card-selector-grid"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="poker-section">
+                        <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 3: Board</h3>
+                        <div class="board-cards">
+                            <div class="card-slot board-card" data-street="flop" data-index="0">
+                                <div class="card-placeholder">Flop 1</div>
+                            </div>
+                            <div class="card-slot board-card" data-street="flop" data-index="1">
+                                <div class="card-placeholder">Flop 2</div>
+                            </div>
+                            <div class="card-slot board-card" data-street="flop" data-index="2">
+                                <div class="card-placeholder">Flop 3</div>
+                            </div>
+                            <div class="card-slot board-card" data-street="turn" data-index="3">
+                                <div class="card-placeholder">Turn</div>
+                            </div>
+                            <div class="card-slot board-card" data-street="river" data-index="4">
+                                <div class="card-placeholder">River</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="poker-section">
+                        <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 4: Villain Action</h3>
+                        <div class="form-group">
+                            <label>Villain Action</label>
+                            <select id="poker-villain-action" class="form-control">
+                                <option value="check">Checked</option>
+                                <option value="bet33">Bet 33% Pot</option>
+                                <option value="bet75">Bet 75% Pot</option>
+                                <option value="allin">All-in / Jam</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="poker-section">
+                        <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 5: Stack & Pot</h3>
+                        <div class="form-group">
+                            <label>Effective Stack ($)</label>
+                            <div class="stack-presets">
+                                <button class="preset-btn" data-stack="100">100bb</button>
+                                <button class="preset-btn" data-stack="50">50bb</button>
+                                <button class="preset-btn" data-stack="25">25bb</button>
+                            </div>
+                            <input type="number" id="poker-stack" value="100" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Pot Size ($)</label>
+                            <input type="number" id="poker-pot" value="20" class="form-control">
+                        </div>
+                        <div id="spr-display" class="spr-display">
+                            <div class="spr-label">SPR: <span id="spr-value">5.0</span></div>
+                            <div class="spr-gauge">
+                                <div class="spr-bar" id="spr-bar"></div>
+                            </div>
+                            <div id="spr-advice" class="spr-advice"></div>
+                        </div>
+                    </div>
+                    
+                    <button id="calc-poker-btn" class="btn" style="width: 100%; margin-top: 15px;">Calculate GTO Strategy</button>
                 </div>
-                <div class="form-group">
-                    <label>Pot Size ($)</label>
-                    <input type="number" id="poker-pot" value="20">
-                </div>
-                <button id="calc-poker-btn" class="btn btn-small">Calculate Strategy</button>
-                <div id="poker-result" class="scanner-result"></div>
                 
-                <h3 style="color: #fbbf24; font-size: 1.1em; margin-top: 20px; margin-bottom: 10px;">Pre-Flop Ranges</h3>
-                <div class="poker-ranges">
-                    <button class="btn btn-small range-btn" data-pos="UTG">UTG</button>
-                    <button class="btn btn-small range-btn" data-pos="HJ">HJ</button>
-                    <button class="btn btn-small range-btn" data-pos="CO">CO</button>
-                    <button class="btn btn-small range-btn" data-pos="BTN">BTN</button>
-                    <button class="btn btn-small range-btn" data-pos="SB">SB</button>
-                    <button class="btn btn-small range-btn" data-pos="BB">BB</button>
+                <!-- Center Column: Hand Matrix -->
+                <div class="poker-matrix">
+                    <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px; text-align: center;">Hand Matrix (13x13)</h3>
+                    <div id="hand-matrix" class="hand-matrix-grid"></div>
+                    <div class="matrix-legend">
+                        <div class="legend-item"><span class="legend-color" style="background: #ef4444;"></span> Raise</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #22c55e;"></span> Call</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #3b82f6;"></span> Fold</div>
+                    </div>
                 </div>
-                <div id="range-display" class="range-display" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; display: none;"></div>
+                
+                <!-- Right Column: Strategy Results -->
+                <div class="poker-results">
+                    <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">GTO Recommendation</h3>
+                    <div id="poker-strategy-result" class="strategy-result-panel">
+                        <div class="strategy-action" id="strategy-action">Enter game state to see recommendation</div>
+                        <div class="strategy-frequencies" id="strategy-frequencies"></div>
+                        <div class="strategy-sizing" id="strategy-sizing"></div>
+                        <div class="strategy-context" id="strategy-context"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

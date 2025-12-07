@@ -2867,76 +2867,447 @@ function initCraps() {
     }
 }
 
-/* --- Tab 4: Poker Assistant Logic --- */
+/* --- Tab 4: GTO Poker Assistant Logic --- */
 function initPoker() {
+    const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+    const suits = ['♠', '♥', '♦', '♣'];
+    const suitColors = { '♠': 'black', '♣': 'black', '♥': 'red', '♦': 'red' };
+    
+    let selectedHoleCards = [];
+    let selectedBoardCards = [];
+    let currentCardSelectorTarget = null;
+    
+    // DOM Elements
     const pokerStack = document.getElementById('poker-stack');
     const pokerPot = document.getElementById('poker-pot');
     const calcPokerBtn = document.getElementById('calc-poker-btn');
-    const pokerResult = document.getElementById('poker-result');
-    const rangeBtns = document.querySelectorAll('.range-btn');
-    const rangeDisplay = document.getElementById('range-display');
+    const villainActionSelect = document.getElementById('poker-villain-action');
+    const sprValue = document.getElementById('spr-value');
+    const sprBar = document.getElementById('spr-bar');
+    const sprAdvice = document.getElementById('spr-advice');
+    const handMatrix = document.getElementById('hand-matrix');
+    const strategyAction = document.getElementById('strategy-action');
+    const strategyFrequencies = document.getElementById('strategy-frequencies');
+    const strategySizing = document.getElementById('strategy-sizing');
+    const strategyContext = document.getElementById('strategy-context');
+    const cardSelectorModal = document.getElementById('card-selector-modal');
     
-    if (calcPokerBtn) {
-        calcPokerBtn.addEventListener('click', () => {
-            const stack = parseFloat(pokerStack?.value) || 0;
-            const pot = parseFloat(pokerPot?.value) || 0;
+    // Initialize Hand Matrix
+    function buildHandMatrix() {
+        if (!handMatrix) return;
+        handMatrix.innerHTML = '';
+        
+        // Header row
+        const headerRow = document.createElement('div');
+        headerRow.style.gridColumn = '1 / 15';
+        headerRow.className = 'matrix-cell header';
+        headerRow.textContent = 'Hand Matrix (Click to select)';
+        handMatrix.appendChild(headerRow);
+        
+        // Column headers
+        for (let i = 0; i < ranks.length; i++) {
+            const header = document.createElement('div');
+            header.className = 'matrix-cell header';
+            header.textContent = ranks[i];
+            handMatrix.appendChild(header);
+        }
+        
+        // Build matrix cells
+        for (let row = 0; row < ranks.length; row++) {
+            // Row header
+            const rowHeader = document.createElement('div');
+            rowHeader.className = 'matrix-cell header';
+            rowHeader.textContent = ranks[row];
+            handMatrix.appendChild(rowHeader);
             
-            if (pot === 0) {
-                if (pokerResult) {
-                    pokerResult.innerHTML = "Please enter a pot size > 0";
-                    pokerResult.style.display = 'block';
+            for (let col = 0; col < ranks.length; col++) {
+                const cell = document.createElement('div');
+                cell.className = 'matrix-cell';
+                
+                if (row === col) {
+                    // Pair
+                    cell.classList.add('pair');
+                    cell.textContent = ranks[row] + ranks[col];
+                } else if (row < col) {
+                    // Suited
+                    cell.textContent = ranks[col] + ranks[row] + 's';
+                } else {
+                    // Offsuit
+                    cell.textContent = ranks[row] + ranks[col] + 'o';
                 }
-                return;
+                
+                cell.dataset.hand = row === col ? ranks[row] + ranks[col] : 
+                                   (row < col ? ranks[col] + ranks[row] + 's' : ranks[row] + ranks[col] + 'o');
+                handMatrix.appendChild(cell);
             }
-            
-            const spr = stack / pot;
-            let advice = "";
-            let cssClass = "";
-            
-            if (spr < 3) {
-                advice = "🚀 <strong>COMMIT MODE (SPR < 3):</strong> Top Pair is the nuts. Do not fold. Shove over bets.";
-                cssClass = "result-good";
-            } else if (spr < 6) {
-                advice = "⚠️ <strong>CAUTION (SPR 3-6):</strong> Play strong draws and 2-pair+ aggressively. Tread lightly with 1-pair.";
-                cssClass = "result-warning";
-            } else {
-                advice = "🧠 <strong>DEEP STACK (SPR > 6):</strong> Implied odds matter. Set mine, chase flushes. Fold Top Pair easily to aggression.";
-                cssClass = "result-good";
-            }
-            
-            if (pokerResult) {
-                pokerResult.style.display = 'block';
-                pokerResult.className = `scanner-result ${cssClass}`;
-                pokerResult.innerHTML = `
-                    <strong>SPR: ${spr.toFixed(1)}</strong><br>
-                    ${advice}
-                `;
-            }
-        });
+        }
     }
-
-    // Simple Pre-Flop Ranges (Visual representation)
-    const ranges = {
-        'UTG': '<div style="color: #cbd5e1;">Open: 77+, AJs+, KQs, AQo+</div>',
-        'HJ': '<div style="color: #cbd5e1;">Open: 66+, ATs+, KJs+, QJs, JTs, AJo+, KQo</div>',
-        'CO': '<div style="color: #cbd5e1;">Open: 44+, A2s+, K9s+, Q9s+, J9s+, T9s, ATo+, KTo+, QTo+</div>',
-        'BTN': '<div style="color: #cbd5e1;">Open: 22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, A2o+, K7o+, Q9o+, J9o+ (Steal Wide)</div>',
-        'SB': '<div style="color: #cbd5e1;">Vs BB 3Bet: Continue with 88+, AJs+, KQs, AQo+. Fold weak pairs.</div>',
-        'BB': '<div style="color: #cbd5e1;">Defend wide vs LP opens. 3-Bet value (QQ+) and bluffs (A5s).</div>'
-    };
-
-    rangeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            rangeBtns.forEach(b => b.style.borderColor = 'transparent');
-            btn.style.borderColor = '#3b82f6';
-            
-            const pos = btn.getAttribute('data-pos');
-            if (rangeDisplay) {
-                rangeDisplay.style.display = 'block';
-                rangeDisplay.innerHTML = `<strong>${pos} Range Strategy:</strong><br>${ranges[pos] || 'No data'}`;
+    
+    // Card Selector
+    function buildCardSelector() {
+        if (!cardSelectorModal) return;
+        const grid = cardSelectorModal.querySelector('.card-selector-grid');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        
+        for (const rank of ranks) {
+            for (const suit of suits) {
+                const item = document.createElement('div');
+                item.className = 'card-selector-item';
+                item.textContent = rank + suit;
+                item.style.color = suitColors[suit] === 'red' ? '#dc2626' : '#1e293b';
+                item.dataset.rank = rank;
+                item.dataset.suit = suit;
+                
+                item.addEventListener('click', () => {
+                    if (currentCardSelectorTarget) {
+                        const card = { rank, suit, color: suitColors[suit] };
+                        renderCard(currentCardSelectorTarget, card);
+                        
+                        if (currentCardSelectorTarget.id.startsWith('hole-card')) {
+                            const index = parseInt(currentCardSelectorTarget.id.split('-')[2]) - 1;
+                            selectedHoleCards[index] = card;
+                        } else if (currentCardSelectorTarget.classList.contains('board-card')) {
+                            const index = parseInt(currentCardSelectorTarget.dataset.index);
+                            selectedBoardCards[index] = card;
+                        }
+                        
+                        cardSelectorModal.style.display = 'none';
+                        currentCardSelectorTarget = null;
+                        updateStrategy();
+                    }
+                });
+                
+                grid.appendChild(item);
+            }
+        }
+    }
+    
+    function renderCard(slot, card) {
+        if (!slot || !card) return;
+        slot.innerHTML = `
+            <div class="card-face ${card.color}">
+                <div class="rank">${card.rank}</div>
+                <div class="suit">${card.suit}</div>
+            </div>
+        `;
+        slot.classList.add('selected');
+    }
+    
+    // Card slot click handlers
+    document.querySelectorAll('.card-slot').forEach(slot => {
+        slot.addEventListener('click', () => {
+            currentCardSelectorTarget = slot;
+            if (cardSelectorModal) {
+                cardSelectorModal.style.display = 'block';
+                buildCardSelector();
             }
         });
     });
+    
+    // Close modal on outside click
+    if (cardSelectorModal) {
+        cardSelectorModal.addEventListener('click', (e) => {
+            if (e.target === cardSelectorModal) {
+                cardSelectorModal.style.display = 'none';
+                currentCardSelectorTarget = null;
+            }
+        });
+    }
+    
+    // Stack Presets
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const stack = parseFloat(btn.dataset.stack);
+            if (pokerStack) pokerStack.value = stack;
+            updateSPR();
+        });
+    });
+    
+    // Update SPR Display
+    function updateSPR() {
+        const stack = parseFloat(pokerStack?.value) || 0;
+        const pot = parseFloat(pokerPot?.value) || 0;
+        
+        if (pot === 0) {
+            if (sprValue) sprValue.textContent = '0.0';
+            if (sprBar) sprBar.style.width = '0%';
+            if (sprAdvice) sprAdvice.textContent = 'Enter pot size to calculate SPR';
+            return;
+        }
+        
+        const spr = stack / pot;
+        if (sprValue) sprValue.textContent = spr.toFixed(1);
+        
+        // Update gauge (0-10 SPR range)
+        const sprPercent = Math.min((spr / 10) * 100, 100);
+        if (sprBar) sprBar.style.width = sprPercent + '%';
+        
+        // SPR Advice
+        if (sprAdvice) {
+            if (spr < 3) {
+                sprAdvice.innerHTML = '<strong style="color: #ef4444;">COMMIT MODE:</strong> Top Pair is the nuts. Do not fold. Shove over bets.';
+            } else if (spr < 6) {
+                sprAdvice.innerHTML = '<strong style="color: #fbbf24;">CAUTION:</strong> Play strong draws and 2-pair+ aggressively. Tread lightly with 1-pair.';
+            } else {
+                sprAdvice.innerHTML = '<strong style="color: #22c55e;">DEEP STACK:</strong> Implied odds matter. Set mine, chase flushes. Fold Top Pair easily to aggression.';
+            }
+        }
+    }
+    
+    // Update SPR on input change
+    if (pokerStack) pokerStack.addEventListener('input', updateSPR);
+    if (pokerPot) pokerPot.addEventListener('input', updateSPR);
+    
+    // GTO Range Calculator
+    function getGTORange(heroPos, villainPos, actionHistory, spr) {
+        // Simplified GTO ranges based on position and action history
+        const ranges = {
+            'UTG': {
+                'srp': { raise: ['AA', 'KK', 'QQ', 'JJ', 'AKs', 'AQs', 'AKo', 'AQo'], call: ['TT', '99', '88', 'AJs', 'KQs'], fold: 'rest' },
+                '3bet': { raise: ['AA', 'KK', 'AKs', 'AKo'], call: ['QQ', 'JJ', 'AQs'], fold: 'rest' }
+            },
+            'CO': {
+                'srp': { raise: ['AA', 'KK', 'QQ', 'JJ', 'TT', '99', 'AKs', 'AQs', 'AJs', 'KQs', 'AKo', 'AQo'], call: ['88', '77', 'ATs', 'KJs'], fold: 'rest' },
+                '3bet': { raise: ['AA', 'KK', 'QQ', 'AKs', 'AKo'], call: ['JJ', 'AQs'], fold: 'rest' }
+            },
+            'BTN': {
+                'srp': { raise: ['AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88', '77', '66', 'AKs', 'AQs', 'AJs', 'ATs', 'KQs', 'KJs', 'QJs', 'JTs', 'AKo', 'AQo', 'AJo', 'KQo'], call: ['55', '44', '33', '22', 'A9s', 'KTs'], fold: 'rest' },
+                '3bet': { raise: ['AA', 'KK', 'QQ', 'AKs', 'AKo'], call: ['JJ', 'AQs', 'AJs'], fold: 'rest' }
+            }
+        };
+        
+        return ranges[heroPos]?.[actionHistory] || { raise: [], call: [], fold: 'rest' };
+    }
+    
+    // Update Hand Matrix with GTO Colors
+    function updateHandMatrix(heroPos, villainPos, actionHistory, spr) {
+        if (!handMatrix) return;
+        
+        const range = getGTORange(heroPos, villainPos, actionHistory, spr);
+        const raiseHands = new Set(range.raise || []);
+        const callHands = new Set(range.call || []);
+        
+        handMatrix.querySelectorAll('.matrix-cell').forEach(cell => {
+            if (cell.classList.contains('header')) return;
+            
+            const hand = cell.dataset.hand;
+            if (!hand) return;
+            
+            // Normalize hand format for comparison
+            const normalized = hand.replace(/[so]$/, '');
+            
+            cell.classList.remove('raise', 'call', 'fold');
+            
+            if (raiseHands.has(normalized) || raiseHands.has(hand)) {
+                cell.classList.add('raise');
+            } else if (callHands.has(normalized) || callHands.has(hand)) {
+                cell.classList.add('call');
+            } else {
+                cell.classList.add('fold');
+            }
+        });
+    }
+    
+    // Calculate Strategy
+    function updateStrategy() {
+        const heroPos = document.getElementById('poker-hero-pos')?.value || 'UTG';
+        const villainPos = document.getElementById('poker-villain-pos')?.value || 'BB';
+        const actionHistory = document.getElementById('poker-action-history')?.value || 'srp';
+        const villainAction = villainActionSelect?.value || 'check';
+        const stack = parseFloat(pokerStack?.value) || 100;
+        const pot = parseFloat(pokerPot?.value) || 20;
+        const spr = pot > 0 ? stack / pot : 0;
+        
+        // Update matrix
+        updateHandMatrix(heroPos, villainPos, actionHistory, spr);
+        
+        // Calculate strategy recommendation
+        const range = getGTORange(heroPos, villainPos, actionHistory, spr);
+        const hasHoleCards = selectedHoleCards.length === 2 && selectedHoleCards[0] && selectedHoleCards[1];
+        
+        if (hasHoleCards) {
+            const hand1 = selectedHoleCards[0].rank + selectedHoleCards[1].rank;
+            const hand2 = selectedHoleCards[1].rank + selectedHoleCards[0].rank;
+            const isPair = selectedHoleCards[0].rank === selectedHoleCards[1].rank;
+            const isSuited = !isPair && selectedHoleCards[0].suit === selectedHoleCards[1].suit;
+            const handStr = isPair ? hand1 : (isSuited ? hand1 + 's' : hand1 + 'o');
+            
+            const inRaise = range.raise.includes(hand1) || range.raise.includes(hand2) || range.raise.includes(handStr);
+            const inCall = range.call.includes(hand1) || range.call.includes(hand2) || range.call.includes(handStr);
+            const isRangeHand = inRaise || inCall;
+            
+            let action = 'FOLD';
+            let betFreq = 0;
+            let checkFreq = 0;
+            let foldFreq = 100;
+            let betSize = 0;
+            let context = '';
+            
+            if (villainAction === 'check') {
+                if (inRaise) {
+                    action = 'BET';
+                    betFreq = 65;
+                    checkFreq = 35;
+                    foldFreq = 0;
+                    betSize = spr < 3 ? 0.5 : spr < 6 ? 0.33 : 0.33;
+                    context = 'Villain checked. Take initiative with value bets and protection bets.';
+                } else if (inCall) {
+                    action = 'CHECK';
+                    betFreq = 25;
+                    checkFreq = 75;
+                    foldFreq = 0;
+                    betSize = 0.33;
+                    context = 'Villain checked. Check back a lot; bet small occasionally for protection.';
+                } else {
+                    action = 'CHECK';
+                    betFreq = 0;
+                    checkFreq = 100;
+                    foldFreq = 0;
+                    betSize = 0;
+                    context = 'Out of range hand. Take the free card; do not fold when Villain checks.';
+                }
+            } else if (villainAction === 'bet33') {
+                if (inRaise) {
+                    action = 'RAISE';
+                    betFreq = 90;
+                    checkFreq = 0;
+                    foldFreq = 10;
+                    betSize = 0.9; // raise to ~3x vs 1/3 pot
+                    context = 'Facing 1/3 pot. Raise your strong value; mix some calls with mid-strength.';
+                } else if (inCall) {
+                    action = 'CALL';
+                    betFreq = 0;
+                    checkFreq = 80; // treating call as neutral line
+                    foldFreq = 20;
+                    betSize = 0.33;
+                    context = 'Facing 1/3 pot. Call with middling range; fold weakest combos.';
+                } else {
+                    action = 'FOLD';
+                    betFreq = 0;
+                    checkFreq = 0;
+                    foldFreq = 100;
+                    betSize = 0;
+                    context = 'Facing a bet: this hand is out of range, so fold.';
+                }
+            } else if (villainAction === 'bet75') {
+                if (inRaise) {
+                    action = 'CALL';
+                    betFreq = 0;
+                    checkFreq = 70;
+                    foldFreq = 30;
+                    betSize = 0.75;
+                    context = 'Facing 3/4 pot. Call strong value; avoid over-bluffing. Some folds are fine.';
+                } else if (inCall) {
+                    action = 'CALL';
+                    betFreq = 0;
+                    checkFreq = 40;
+                    foldFreq = 60;
+                    betSize = 0.75;
+                    context = 'Facing 3/4 pot. Call the top of your call range; fold the bottom.';
+                } else {
+                    action = 'FOLD';
+                    betFreq = 0;
+                    checkFreq = 0;
+                    foldFreq = 100;
+                    betSize = 0;
+                    context = 'Facing a big bet: out-of-range hands should fold.';
+                }
+            } else { // all-in / jam
+                if (inRaise) {
+                    action = 'CALL';
+                    betFreq = 0;
+                    checkFreq = 50;
+                    foldFreq = 50;
+                    betSize = 1;
+                    context = 'Facing jam. Call only with top of range; fold marginal hands.';
+                } else {
+                    action = 'FOLD';
+                    betFreq = 0;
+                    checkFreq = 0;
+                    foldFreq = 100;
+                    betSize = 0;
+                    context = 'Facing jam: fold everything outside premium range.';
+                }
+            }
+            
+            if (strategyAction) {
+                strategyAction.textContent = action;
+                strategyAction.style.color = action === 'RAISE' || action === 'BET' ? '#22c55e' : action === 'CALL' || action === 'CHECK' ? '#fbbf24' : '#ef4444';
+            }
+            
+            if (strategyFrequencies) {
+                strategyFrequencies.innerHTML = `
+                    <div class="frequency-bar">
+                        <div class="frequency-label">
+                            <span>Bet / Raise</span>
+                            <span>${betFreq}%</span>
+                        </div>
+                        <div class="frequency-bar-fill" style="width: ${betFreq}%">${betFreq}%</div>
+                    </div>
+                    <div class="frequency-bar">
+                        <div class="frequency-label">
+                            <span>Check / Call</span>
+                            <span>${checkFreq}%</span>
+                        </div>
+                        <div class="frequency-bar-fill" style="width: ${checkFreq}%; background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);">${checkFreq}%</div>
+                    </div>
+                    <div class="frequency-bar">
+                        <div class="frequency-label">
+                            <span>Fold</span>
+                            <span>${foldFreq}%</span>
+                        </div>
+                        <div class="frequency-bar-fill" style="width: ${foldFreq}%; background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);">${foldFreq}%</div>
+                    </div>
+                `;
+            }
+            
+            if (strategySizing) {
+                if (betSize > 0 && action !== 'FOLD') {
+                    const betAmount = (pot * betSize).toFixed(2);
+                    strategySizing.innerHTML = `
+                        <strong>Preferred Size</strong>
+                        <div style="font-size: 1.2em; margin-top: 5px;">$${betAmount} (${(betSize * 100).toFixed(0)}% Pot)</div>
+                    `;
+                } else if (action === 'CALL') {
+                    const callAmount = villainAction === 'bet33' ? (pot * 0.33).toFixed(2) : villainAction === 'bet75' ? (pot * 0.75).toFixed(2) : (pot).toFixed(2);
+                    strategySizing.innerHTML = `
+                        <strong>Call Amount</strong>
+                        <div style="font-size: 1.2em; margin-top: 5px;">$${callAmount}</div>
+                    `;
+                } else {
+                    strategySizing.innerHTML = '<strong>No Bet Recommendation</strong><div style="margin-top: 5px;">Check / Fold as advised</div>';
+                }
+            }
+            
+            if (strategyContext) {
+                strategyContext.textContent = context;
+            }
+        } else {
+            if (strategyAction) strategyAction.textContent = 'Select Hole Cards';
+            if (strategyFrequencies) strategyFrequencies.innerHTML = '';
+            if (strategySizing) strategySizing.innerHTML = '';
+            if (strategyContext) strategyContext.textContent = 'Enter your hole cards and game state to get GTO recommendations.';
+        }
+    }
+    
+    // Calculate button
+    if (calcPokerBtn) {
+        calcPokerBtn.addEventListener('click', updateStrategy);
+    }
+    
+    // Update on input changes
+    ['poker-hero-pos', 'poker-villain-pos', 'poker-action-history'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateStrategy);
+    });
+    if (villainActionSelect) villainActionSelect.addEventListener('change', updateStrategy);
+    
+    // Initialize
+    buildHandMatrix();
+    updateSPR();
+    updateStrategy();
 }
 
 // Initialize Craps and Poker on DOM ready
