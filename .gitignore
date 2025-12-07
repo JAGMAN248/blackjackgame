@@ -1,0 +1,66 @@
+# API Keys and Secrets
+*.key
+*.pem
+*.p12
+*.env
+.env*
+*.secret
+*.credentials
+*api-key*
+*api_key*
+*apikey*
+*API_KEY*
+*SECRET*
+*TOKEN*
+*PASSWORD*
+*PASS*
+
+# Configuration files that might contain secrets
+config.json
+config.js
+config.local.*
+secrets.json
+secrets.js
+credentials.json
+credentials.js
+
+# Environment and local config
+.env.local
+.env.development
+.env.production
+.env.test
+.local
+local.json
+
+# Node modules (if you add dependencies later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.min.css
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
