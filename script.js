@@ -81,42 +81,112 @@ function initTabs() {
     const tabPanes = document.querySelectorAll('.tab-pane');
     
     if (tabBtns.length === 0 || tabPanes.length === 0) {
-        console.warn('Tab buttons or panes not found');
+        console.warn('Tab buttons or panes not found', { buttons: tabBtns.length, panes: tabPanes.length });
         return;
     }
     
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Remove active class from all buttons and panes
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabPanes.forEach(p => p.classList.remove('active'));
+    // Function to switch tabs
+    function switchTab(tabId) {
+        // Hide all panes
+        tabPanes.forEach(p => {
+            p.classList.remove('active');
+            p.style.display = 'none';
+        });
+        
+        // Remove active from all buttons
+        tabBtns.forEach(b => b.classList.remove('active'));
+        
+        // Show target pane
+        const targetPane = document.getElementById(tabId);
+        if (targetPane) {
+            targetPane.classList.add('active');
+            targetPane.style.display = 'flex';
+            // Force a reflow to ensure display change
+            void targetPane.offsetWidth;
             
-            // Add active class to clicked button
-            btn.classList.add('active');
-            
-            // Show corresponding pane
-            const tabId = btn.getAttribute('data-tab');
-            if (tabId) {
-                const targetPane = document.getElementById(tabId);
-                if (targetPane) {
-                    targetPane.classList.add('active');
-                } else {
-                    console.warn('Tab pane not found:', tabId);
-                }
+            // Initialize tab-specific content when shown
+            if (tabId === 'tab-poker') {
+                // Re-initialize poker if needed (in case elements weren't ready before)
+                setTimeout(() => {
+                    const handMatrix = document.getElementById('hand-matrix');
+                    if (handMatrix && handMatrix.children.length === 0) {
+                        // Matrix not built yet, call initPoker again
+                        if (typeof initPoker === 'function') {
+                            initPoker();
+                        }
+                    }
+                }, 100);
             }
+        } else {
+            console.error('Tab pane not found:', tabId, 'Available:', Array.from(tabPanes).map(p => p.id));
+        }
+    }
+    
+    // Add click handlers
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            // Specific logic for tabs
-            if (tabId === 'tab-wash') {
-                // Resizing might be needed
+            const tabId = this.getAttribute('data-tab');
+            if (tabId) {
+                // Update button active state
+                tabBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Switch tab
+                switchTab(tabId);
             }
         });
     });
+    
+    // Initialize first tab - ensure it's visible
+    const activeBtn = document.querySelector('.tab-btn.active');
+    if (activeBtn) {
+        const tabId = activeBtn.getAttribute('data-tab');
+        if (tabId) {
+            switchTab(tabId);
+        }
+    } else if (tabBtns.length > 0) {
+        // No active button, activate first one
+        const firstTabId = tabBtns[0].getAttribute('data-tab');
+        if (firstTabId) {
+            tabBtns[0].classList.add('active');
+            switchTab(firstTabId);
+        }
+    }
+    
+    // Force show the active pane if it exists (fallback)
+    const activePane = document.querySelector('.tab-pane.active');
+    if (activePane) {
+        activePane.classList.add('active');
+        activePane.style.display = 'flex';
+    } else {
+        // Emergency fallback: show first pane
+        if (tabPanes.length > 0) {
+            const firstPane = tabPanes[0];
+            firstPane.classList.add('active');
+            firstPane.style.display = 'flex';
+            if (tabBtns.length > 0) {
+                tabBtns[0].classList.add('active');
+            }
+        }
+    }
+    
+    console.log('Tabs initialized. Active tab:', document.querySelector('.tab-btn.active')?.getAttribute('data-tab'));
 }
 
-// Initialize tabs on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-    initTabs();
-});
+// Helper function to switch to a specific tab programmatically
+function switchToTab(tabId) {
+    const btn = document.querySelector(`[data-tab="${tabId}"]`);
+    if (btn) {
+        btn.click();
+    } else {
+        console.warn('Tab button not found:', tabId);
+    }
+}
+
+// Tab initialization moved to consolidated DOMContentLoaded handler below
 
 /* --- Tab 2: Game Scanner Logic --- */
 const scanPayout = document.getElementById('scan-payout');
@@ -182,6 +252,11 @@ const healthCasino = document.getElementById('health-casino');
 const healthSports = document.getElementById('health-sports');
 const healthWithdraw = document.getElementById('health-withdraw');
 const healthStatus = document.getElementById('health-status');
+const healthFreeSpins = document.getElementById('health-free-spins');
+const freeSpinsGame = document.getElementById('free-spins-game');
+const freeSpinsAmount = document.getElementById('free-spins-amount');
+const spendFreeSpinsBtn = document.getElementById('spend-free-spins-btn');
+const freeSpinsResult = document.getElementById('free-spins-result');
 
 function updateHealth() {
     if (!healthStatus) return;
@@ -190,11 +265,23 @@ function updateHealth() {
     const casino = parseFloat(healthCasino.value) || 0;
     const sports = parseFloat(healthSports.value) || 0;
     const withdrawn = parseFloat(healthWithdraw.value) || 0;
+    const freeSpinWinnings = sessionStats.freeSpinWinnings || 0;
+    const cashPlayed = sessionStats.cashPlayed || 0;
     
     if (deposited === 0) return;
 
     const ratioWithdraw = (withdrawn / (sports || 1)) * 100;
     const turnover = casino / deposited;
+    
+    // W/D Ratio (Withdrawal to Deposit) - Critical metric
+    const wdRatio = deposited > 0 ? (withdrawn / deposited) * 100 : 0;
+    
+    // Free Spin ROI Risk (if withdrawing free spin winnings)
+    const freeSpinROI = freeSpinWinnings > 0 && deposited > 0 ? (freeSpinWinnings / deposited) * 100 : 0;
+    
+    // Cash Commitment Ratio (how much of your play is cash vs free)
+    const totalPlayed = casino;
+    const cashCommitment = totalPlayed > 0 ? (cashPlayed / totalPlayed) * 100 : 0;
     
     let statusHTML = "";
     
@@ -207,9 +294,47 @@ function updateHealth() {
 
     // Alert 2: Casino Turnover
     if (turnover > 5) {
-        statusHTML += `<div style="color: #4ade80;"><strong>✅ Green Light:</strong> Casino Turnover is ${turnover.toFixed(1)}x (Target > 5x). Safe to withdraw using Method B.</div>`;
+        statusHTML += `<div style="color: #4ade80; margin-bottom: 10px;"><strong>✅ Green Light:</strong> Casino Turnover is ${turnover.toFixed(1)}x (Target > 5x). Safe to withdraw using Method B.</div>`;
     } else {
-        statusHTML += `<div style="color: #fbbf24;"><strong>⚠️ Low Turnover:</strong> Only ${turnover.toFixed(1)}x. Grind more IGT BJ before withdrawing.</div>`;
+        statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px;"><strong>⚠️ Low Turnover:</strong> Only ${turnover.toFixed(1)}x. Grind more IGT BJ before withdrawing.</div>`;
+    }
+    
+    // Alert 3: W/D Ratio Warning
+    if (wdRatio > 200 && deposited > 0) {
+        statusHTML += `<div style="color: #f87171; margin-bottom: 10px;"><strong>🚨 HIGH W/D RATIO:</strong> Withdrawing ${wdRatio.toFixed(0)}% of deposits. Risk of manual review. Consider churning more before withdrawal.</div>`;
+    } else if (wdRatio > 150) {
+        statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px;"><strong>⚠️ Elevated W/D:</strong> ${wdRatio.toFixed(0)}% ratio. Monitor closely.</div>`;
+    }
+    
+    // Alert 4: Free Spin ROI Risk (Bonus Hunter Flag)
+    if (freeSpinROI > 50 && freeSpinWinnings > 0) {
+        statusHTML += `<div style="color: #f87171; margin-bottom: 10px;"><strong>🚨 BONUS HUNTER RISK:</strong> ${freeSpinROI.toFixed(0)}% of deposits from free spins. High risk of "Bonus Hunter" flag. <strong>Action:</strong> Play more cash before withdrawing.</div>`;
+    } else if (freeSpinROI > 25) {
+        statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px;"><strong>⚠️ Free Spin Alert:</strong> ${freeSpinROI.toFixed(0)}% from free spins. Mix in more cash play.</div>`;
+    }
+    
+    // Alert 5: Cash Commitment (Order of Operations)
+    if (cashCommitment < 30 && totalPlayed > 0) {
+        statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px;"><strong>⚠️ LOW CASH COMMITMENT:</strong> Only ${cashCommitment.toFixed(0)}% of play is cash. Signals risk-aversion. <strong>Fix:</strong> Play $20-50 cash before using free spins.</div>`;
+    } else if (cashCommitment < 50) {
+        statusHTML += `<div style="color: #60a5fa; margin-bottom: 10px;"><strong>💡 Strategy Tip:</strong> ${cashCommitment.toFixed(0)}% cash play. Mix cash and free spins for better profile.</div>`;
+    }
+    
+    // Alert 6: Churn Warning (if withdrawing free spin winnings)
+    if (freeSpinWinnings > 0 && withdrawn > 0 && freeSpinWinnings > withdrawn * 0.5) {
+        const churnNeeded = Math.max(freeSpinWinnings * 0.5, 100);
+        statusHTML += `<div style="color: #f87171; margin-bottom: 10px;"><strong>🚨 CHURN REQUIRED:</strong> Withdrawing free spin winnings without churn = "Hit and Run" flag. <strong>Action:</strong> Play through $${churnNeeded.toFixed(0)} more before withdrawing.</div>`;
+    }
+    
+    // Alert 7: Deposit Padding Warning
+    const freeSpinsUsed = (sessionStats.freeSpins || 0) < parseInt(healthFreeSpins?.value || 0);
+    const daysSinceDeposit = sessionStats.lastDepositDate ? 
+        Math.floor((new Date() - new Date(sessionStats.lastDepositDate)) / (1000 * 60 * 60 * 24)) : null;
+    
+    if (freeSpinsUsed && deposited === 0) {
+        statusHTML += `<div style="color: #f87171; margin-bottom: 10px;"><strong>🚨 DEPOSIT PADDING NEEDED:</strong> Using free spins without a deposit = "Free-loader" flag. <strong>Action:</strong> Make a clean deposit (no bonus) before heavy free spin usage.</div>`;
+    } else if (freeSpinsUsed && daysSinceDeposit !== null && daysSinceDeposit > 7) {
+        statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px;"><strong>⚠️ OLD DEPOSIT:</strong> Last deposit was ${daysSinceDeposit} days ago. Consider a fresh deposit before using free spins.</div>`;
     }
 
     healthStatus.style.display = 'block';
@@ -221,6 +346,146 @@ if (healthDeposit) {
     [healthDeposit, healthCasino, healthSports, healthWithdraw].forEach(el => {
         el.addEventListener('input', updateHealth);
     });
+}
+
+// Record deposit date (for deposit padding strategy)
+const recordDepositBtn = document.getElementById('record-deposit-btn');
+if (recordDepositBtn) {
+    recordDepositBtn.addEventListener('click', () => {
+        const depositAmount = parseFloat(healthDeposit.value) || 0;
+        if (depositAmount > 0) {
+            sessionStats.lastDepositDate = new Date().toISOString();
+            sessionStats.deposit = depositAmount;
+            
+            // Show confirmation
+            if (freeSpinsResult) {
+                freeSpinsResult.style.display = 'block';
+                freeSpinsResult.style.color = '#22c55e';
+                freeSpinsResult.innerHTML = `
+                    ✅ Deposit recorded: <strong>$${depositAmount.toFixed(2)}</strong><br>
+                    <div style="margin-top: 8px; padding: 8px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; color: #60a5fa; font-size: 0.85em;">
+                        💡 <strong>Deposit Padding Active:</strong> Having cash balance before using free spins improves your profile.
+                    </div>
+                `;
+            }
+        }
+    });
+}
+
+// Free Spins Spending Logic
+function spendFreeSpins() {
+    if (!healthFreeSpins || !freeSpinsGame || !freeSpinsAmount || !spendFreeSpinsBtn || !freeSpinsResult) return;
+    
+    const availableSpins = parseInt(healthFreeSpins.value) || 0;
+    const spinsToSpend = parseInt(freeSpinsAmount.value) || 1;
+    const gameType = freeSpinsGame.value || 'slots';
+    
+    if (availableSpins < spinsToSpend) {
+        freeSpinsResult.style.display = 'block';
+        freeSpinsResult.style.color = '#f87171';
+        freeSpinsResult.textContent = `❌ Not enough free spins! You have ${availableSpins} available.`;
+        return;
+    }
+    
+    // Game values per spin
+    const gameValues = {
+        'slots': 1,
+        'blackjack': 5,
+        'roulette': 2,
+        'video-poker': 3
+    };
+    
+    const valuePerSpin = gameValues[gameType] || 1;
+    const totalValue = spinsToSpend * valuePerSpin;
+    
+    // Update stats - track free spin play separately from cash
+    sessionStats.freeSpins = availableSpins - spinsToSpend;
+    sessionStats.casinoPlayed += totalValue;
+    // Note: free spin play is included in casinoPlayed but we track it separately for ratio calculations
+    
+    // Update UI
+    healthFreeSpins.value = sessionStats.freeSpins;
+    healthCasino.value = sessionStats.casinoPlayed;
+    
+    // Show result with strategic warning
+    freeSpinsResult.style.display = 'block';
+    freeSpinsResult.style.color = '#60a5fa';
+    
+    const cashPlayed = sessionStats.cashPlayed || 0;
+    const totalPlayed = sessionStats.casinoPlayed || 0;
+    const cashRatio = totalPlayed > 0 ? (cashPlayed / totalPlayed) * 100 : 0;
+    
+    let warning = '';
+    if (cashRatio < 30 && totalPlayed > 50) {
+        warning = `<div style="margin-top: 8px; padding: 8px; background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; color: #fbbf24; font-size: 0.85em;">
+            ⚠️ <strong>Low Cash Ratio:</strong> Only ${cashRatio.toFixed(0)}% cash play. Consider playing $20-50 cash before more free spins.
+        </div>`;
+    }
+    
+    freeSpinsResult.innerHTML = `
+        ✅ Spent <strong>${spinsToSpend}</strong> free spins on <strong>${gameType.replace('-', ' ')}</strong><br>
+        Added <strong>$${totalValue.toFixed(2)}</strong> to Casino Play<br>
+        Remaining free spins: <strong>${sessionStats.freeSpins}</strong>
+        ${warning}
+    `;
+    
+    // Update health status
+    updateHealth();
+    
+    // Clear amount after spending
+    freeSpinsAmount.value = 1;
+}
+
+// Track free spin winnings (when you win from free spins)
+function recordFreeSpinWinnings(amount) {
+    sessionStats.freeSpinWinnings = (sessionStats.freeSpinWinnings || 0) + amount;
+    updateHealth();
+}
+
+// Event listeners for free spins
+if (spendFreeSpinsBtn) {
+    spendFreeSpinsBtn.addEventListener('click', spendFreeSpins);
+}
+
+if (healthFreeSpins) {
+    healthFreeSpins.addEventListener('input', () => {
+        sessionStats.freeSpins = parseInt(healthFreeSpins.value) || 0;
+    });
+}
+
+// Record free spin winnings
+const freeSpinWinningsInput = document.getElementById('free-spin-winnings');
+const recordWinningsBtn = document.getElementById('record-winnings-btn');
+
+if (recordWinningsBtn && freeSpinWinningsInput) {
+    recordWinningsBtn.addEventListener('click', () => {
+        const winnings = parseFloat(freeSpinWinningsInput.value) || 0;
+        if (winnings > 0) {
+            recordFreeSpinWinnings(winnings);
+            freeSpinWinningsInput.value = 0;
+            
+            // Show confirmation
+            if (freeSpinsResult) {
+                freeSpinsResult.style.display = 'block';
+                freeSpinsResult.style.color = '#22c55e';
+                freeSpinsResult.innerHTML = `
+                    ✅ Recorded <strong>$${winnings.toFixed(2)}</strong> in free spin winnings<br>
+                    <div style="margin-top: 8px; padding: 8px; background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; color: #fbbf24; font-size: 0.85em;">
+                        ⚠️ <strong>Churn Required:</strong> Play through at least $${(winnings * 0.5).toFixed(0)} before withdrawing to avoid "Hit and Run" flag.
+                    </div>
+                `;
+            }
+        }
+    });
+}
+
+// Track cash play separately (when playing with deposited money, not free spins)
+// This is called when user plays blackjack or other games with their own money
+function recordCashPlay(amount) {
+    sessionStats.cashPlayed = (sessionStats.cashPlayed || 0) + amount;
+    sessionStats.casinoPlayed += amount;
+    if (healthCasino) healthCasino.value = sessionStats.casinoPlayed;
+    updateHealth();
 }
 
 /* --- Tab 4: Parlay Builder Logic --- */
@@ -2054,7 +2319,9 @@ function endGame(result, message) {
     }
     
     // Update Stats (Session & Lifetime)
+    // Blackjack play is cash play (not free spins)
     sessionStats.casinoPlayed += totalWagered;
+    sessionStats.cashPlayed = (sessionStats.cashPlayed || 0) + totalWagered;
     if (currentUser) {
         currentUser.casinoPlayed += totalWagered;
         saveUserProfile(); // Saves to localStorage and updates UI/Guide
@@ -2607,7 +2874,14 @@ let sessionStats = {
     deposit: 0,
     casinoPlayed: 0,
     sportsPlayed: 0,
-    withdrawn: 0
+    withdrawn: 0,
+    freeSpins: 0,
+    freeSpinWinnings: 0, // Track winnings from free spins separately
+    cashPlayed: 0, // Track cash play separately from free spins
+    lastDepositDate: null, // Track when last deposit was made
+    // New wallet system
+    walletEntries: [], // Array of {amount, source, id}
+    plannedActivities: [] // Array of {game, amount, risk, id}
 };
 
 // Load User from LocalStorage
@@ -2664,6 +2938,7 @@ function updateUIForLogin() {
         healthCasino.value = sessionStats.casinoPlayed;
         healthSports.value = sessionStats.sportsPlayed;
         healthWithdraw.value = sessionStats.withdrawn;
+        if (healthFreeSpins) healthFreeSpins.value = sessionStats.freeSpins || 0;
         
         // Trigger updates
         updateHealth();
@@ -2677,6 +2952,7 @@ function updateUIForLogin() {
         healthCasino.value = 0;
         healthSports.value = 0;
         healthWithdraw.value = 0;
+        if (healthFreeSpins) healthFreeSpins.value = 0;
         updateHealth();
         if (guideOverlay) guideOverlay.style.display = 'none';
     }
@@ -2796,14 +3072,7 @@ if (healthDeposit) {
     });
 }
 
-// Auto-login Tyler on load
-document.addEventListener('DOMContentLoaded', () => {
-    // Optional: Check if last user exists? For now, hardcode default or wait
-    // Let's auto-login "Tyler" if it's the first time or just leave it manual.
-    // The prompt said "Make the first profile mine (Tyler)".
-    currentUser = loadUserProfile("Tyler");
-    updateUIForLogin();
-});
+// Auto-login Tyler on load (consolidated into main DOMContentLoaded)
 
 /* --- Tab 3: Craps Logic --- */
 function initCraps() {
@@ -3424,15 +3693,429 @@ function initPoker() {
     });
     if (villainActionSelect) villainActionSelect.addEventListener('change', maybeAutoUpdate);
     
-    // Initialize
-    buildHandMatrix();
-    updateSPR();
-    updateStrategy();
+    // Initialize - only if elements exist
+    console.log('Initializing Poker Assistant...', {
+        handMatrix: !!handMatrix,
+        pokerStack: !!pokerStack,
+        pokerPot: !!pokerPot,
+        strategyAction: !!strategyAction
+    });
+    
+    if (handMatrix) {
+        buildHandMatrix();
+        console.log('Hand matrix built, cells:', handMatrix.children.length);
+    } else {
+        console.warn('Hand matrix element not found');
+    }
+    
+    if (pokerStack && pokerPot) {
+        updateSPR();
+    }
+    
+    if (strategyAction) {
+        updateStrategy();
+    }
+    
+    // Also set up a listener to initialize when tab is shown
+    const pokerTab = document.getElementById('tab-poker');
+    if (pokerTab) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (pokerTab.classList.contains('active')) {
+                        console.log('Poker tab activated, checking initialization...');
+                        const hm = document.getElementById('hand-matrix');
+                        if (hm && hm.children.length === 0) {
+                            console.log('Matrix empty, rebuilding...');
+                            buildHandMatrix();
+                            updateSPR();
+                            updateStrategy();
+                        }
+                    }
+                }
+            });
+        });
+        observer.observe(pokerTab, { attributes: true });
+    }
+    
+    console.log('Poker Assistant initialization complete');
 }
 
-// Initialize Craps and Poker on DOM ready
+/* --- New Wallet & Session Planner System --- */
+let walletEntryIdCounter = 0;
+let activityIdCounter = 0;
+
+const walletEntriesEl = document.getElementById('wallet-entries');
+const addWalletEntryBtn = document.getElementById('add-wallet-entry-btn');
+const totalBankrollEl = document.getElementById('total-bankroll');
+const cleanMoneyTotalEl = document.getElementById('clean-money-total');
+const dirtyMoneyTotalEl = document.getElementById('dirty-money-total');
+const dirtyBarEl = document.getElementById('dirty-bar');
+const cleanBarEl = document.getElementById('clean-bar');
+const dirtyPercentageEl = document.getElementById('dirty-percentage');
+const washStatusEl = document.getElementById('wash-status');
+const plannedActivitiesEl = document.getElementById('planned-activities');
+const addActivityBtn = document.getElementById('add-activity-btn');
+const projectedWageringEl = document.getElementById('projected-wagering');
+const projectedTurnoverEl = document.getElementById('projected-turnover');
+const projectedWashedEl = document.getElementById('projected-washed');
+
+// Money sources (Clean vs Dirty)
+const moneySources = {
+    'fresh-deposit': { label: 'Fresh Deposit', clean: true, color: '#22c55e' },
+    'free-spin-winnings': { label: 'Free Spin Winnings', clean: false, color: '#ef4444' },
+    'sportsbook-winnings': { label: 'Sportsbook Winnings', clean: true, color: '#22c55e' },
+    'retention-bonus': { label: 'Retention Bonus', clean: false, color: '#f87171' },
+    'reload-bonus': { label: 'Reload Bonus', clean: false, color: '#f87171' },
+    'cashback': { label: 'Cashback', clean: true, color: '#22c55e' }
+};
+
+// Game types for activities
+const gameTypes = {
+    'progressive-slots': { label: 'Progressive Slots', risk: 'Low', volatility: 'High', washEfficiency: 0.8 },
+    'blackjack': { label: 'Blackjack', risk: 'High', volatility: 'Low', washEfficiency: 1.0 },
+    'roulette': { label: 'Roulette', risk: 'Medium', volatility: 'Medium', washEfficiency: 0.9 },
+    'video-poker': { label: 'Video Poker', risk: 'Medium', volatility: 'Medium', washEfficiency: 0.95 },
+    'slots': { label: 'Regular Slots', risk: 'Low', volatility: 'High', washEfficiency: 0.85 }
+};
+
+function addWalletEntry(amount = 0, source = 'fresh-deposit') {
+    const id = walletEntryIdCounter++;
+    const entry = { id, amount, source };
+    sessionStats.walletEntries.push(entry);
+    renderWalletEntries();
+    updateWalletSummary();
+    updateMixingBowl();
+    updateProjections();
+}
+
+function removeWalletEntry(id) {
+    sessionStats.walletEntries = sessionStats.walletEntries.filter(e => e.id !== id);
+    renderWalletEntries();
+    updateWalletSummary();
+    updateMixingBowl();
+    updateProjections();
+}
+
+function renderWalletEntries() {
+    if (!walletEntriesEl) return;
+    
+    if (sessionStats.walletEntries.length === 0) {
+        walletEntriesEl.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No money sources added yet. Click "Add Money Source" to begin.</div>';
+        return;
+    }
+    
+    walletEntriesEl.innerHTML = sessionStats.walletEntries.map(entry => {
+        const source = moneySources[entry.source] || moneySources['fresh-deposit'];
+        return `
+            <div class="wallet-entry" data-id="${entry.id}" style="display: flex; gap: 10px; align-items: center; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 10px; border-left: 3px solid ${source.color};">
+                <input type="number" value="${entry.amount}" step="0.01" min="0" class="wallet-amount" data-id="${entry.id}" style="flex: 1; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                <select class="wallet-source" data-id="${entry.id}" style="flex: 2; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    ${Object.entries(moneySources).map(([key, val]) => 
+                        `<option value="${key}" ${entry.source === key ? 'selected' : ''}>${val.label}</option>`
+                    ).join('')}
+                </select>
+                <button class="btn-icon remove-wallet-entry" data-id="${entry.id}" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; border-radius: 6px; cursor: pointer;">×</button>
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners
+    walletEntriesEl.querySelectorAll('.wallet-amount').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const entry = sessionStats.walletEntries.find(e => e.id === id);
+            if (entry) {
+                entry.amount = parseFloat(e.target.value) || 0;
+                updateWalletSummary();
+                updateMixingBowl();
+                updateProjections();
+            }
+        });
+    });
+    
+    walletEntriesEl.querySelectorAll('.wallet-source').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const entry = sessionStats.walletEntries.find(e => e.id === id);
+            if (entry) {
+                entry.source = e.target.value;
+                renderWalletEntries();
+                updateWalletSummary();
+                updateMixingBowl();
+                updateProjections();
+            }
+        });
+    });
+    
+    walletEntriesEl.querySelectorAll('.remove-wallet-entry').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            removeWalletEntry(id);
+        });
+    });
+}
+
+function updateWalletSummary() {
+    let total = 0;
+    let clean = 0;
+    let dirty = 0;
+    
+    sessionStats.walletEntries.forEach(entry => {
+        total += entry.amount;
+        const source = moneySources[entry.source];
+        if (source.clean) {
+            clean += entry.amount;
+        } else {
+            dirty += entry.amount;
+        }
+    });
+    
+    if (totalBankrollEl) totalBankrollEl.textContent = `$${total.toFixed(2)}`;
+    if (cleanMoneyTotalEl) cleanMoneyTotalEl.textContent = `$${clean.toFixed(2)}`;
+    if (dirtyMoneyTotalEl) dirtyMoneyTotalEl.textContent = `$${dirty.toFixed(2)}`;
+    
+    // Update sessionStats for backward compatibility
+    sessionStats.deposit = clean;
+    if (healthDeposit) healthDeposit.value = clean;
+}
+
+function updateMixingBowl() {
+    let total = 0;
+    let dirty = 0;
+    
+    sessionStats.walletEntries.forEach(entry => {
+        total += entry.amount;
+        const source = moneySources[entry.source];
+        if (!source.clean) {
+            dirty += entry.amount;
+        }
+    });
+    
+    const dirtyPercent = total > 0 ? (dirty / total) * 100 : 0;
+    const cleanPercent = 100 - dirtyPercent;
+    
+    if (dirtyBarEl) dirtyBarEl.style.width = dirtyPercent + '%';
+    if (cleanBarEl) cleanBarEl.style.width = cleanPercent + '%';
+    if (dirtyPercentageEl) dirtyPercentageEl.textContent = dirtyPercent.toFixed(1) + '%';
+    
+    if (washStatusEl) {
+        if (dirty === 0) {
+            washStatusEl.textContent = '✅ All money is clean. No washing needed.';
+        } else if (dirtyPercent > 50) {
+            washStatusEl.innerHTML = `🚨 <strong>High Risk:</strong> ${dirtyPercent.toFixed(0)}% dirty money. Plan activities to wash it.`;
+        } else if (dirtyPercent > 25) {
+            washStatusEl.innerHTML = `⚠️ <strong>Moderate Risk:</strong> ${dirtyPercent.toFixed(0)}% dirty money. Add washing activities.`;
+        } else {
+            washStatusEl.innerHTML = `✅ <strong>Low Risk:</strong> Only ${dirtyPercent.toFixed(0)}% dirty money.`;
+        }
+    }
+}
+
+function addPlannedActivity(game = 'progressive-slots', amount = 0) {
+    const id = activityIdCounter++;
+    const activity = { id, game, amount };
+    sessionStats.plannedActivities.push(activity);
+    renderPlannedActivities();
+    updateProjections();
+}
+
+function removePlannedActivity(id) {
+    sessionStats.plannedActivities = sessionStats.plannedActivities.filter(a => a.id !== id);
+    renderPlannedActivities();
+    updateProjections();
+}
+
+function renderPlannedActivities() {
+    if (!plannedActivitiesEl) return;
+    
+    if (sessionStats.plannedActivities.length === 0) {
+        plannedActivitiesEl.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No activities planned yet. Click "Add Activity" to plan your play.</div>';
+        return;
+    }
+    
+    plannedActivitiesEl.innerHTML = sessionStats.plannedActivities.map(activity => {
+        const game = gameTypes[activity.game] || gameTypes['progressive-slots'];
+        const noteHtml = game.note ? `<div style="font-size: 0.75em; color: #60a5fa; margin-top: 4px;">💡 ${game.note}</div>` : '';
+        return `
+            <div class="planned-activity" data-id="${activity.id}" style="padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 10px; border-left: 3px solid #fbbf24;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select class="activity-game" data-id="${activity.id}" style="flex: 2; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        ${Object.entries(gameTypes).map(([key, val]) => 
+                            `<option value="${key}" ${activity.game === key ? 'selected' : ''}>${val.label} (${val.risk} Risk)</option>`
+                        ).join('')}
+                    </select>
+                    <input type="number" value="${activity.amount}" step="0.01" min="0" class="activity-amount" data-id="${activity.id}" placeholder="Amount" style="flex: 1; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <button class="btn-icon remove-activity" data-id="${activity.id}" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; border-radius: 6px; cursor: pointer;">×</button>
+                </div>
+                ${noteHtml}
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners
+    plannedActivitiesEl.querySelectorAll('.activity-game').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const activity = sessionStats.plannedActivities.find(a => a.id === id);
+            if (activity) {
+                activity.game = e.target.value;
+                renderPlannedActivities();
+                updateProjections();
+            }
+        });
+    });
+    
+    plannedActivitiesEl.querySelectorAll('.activity-amount').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const activity = sessionStats.plannedActivities.find(a => a.id === id);
+            if (activity) {
+                activity.amount = parseFloat(e.target.value) || 0;
+                updateProjections();
+            }
+        });
+    });
+    
+    plannedActivitiesEl.querySelectorAll('.remove-activity').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            removePlannedActivity(id);
+        });
+    });
+}
+
+function updateProjections() {
+    let totalWagering = 0;
+    let totalDirty = 0;
+    
+    // Calculate total dirty money
+    sessionStats.walletEntries.forEach(entry => {
+        const source = moneySources[entry.source];
+        if (!source.clean) {
+            totalDirty += entry.amount;
+        }
+    });
+    
+    // Calculate total planned wagering and washing
+    let washedAmount = 0;
+    sessionStats.plannedActivities.forEach(activity => {
+        const amount = activity.amount || 0;
+        totalWagering += amount;
+        
+        const game = gameTypes[activity.game] || gameTypes['progressive-slots'];
+        // Washing efficiency: how much dirty money gets washed per dollar wagered
+        const washFromThis = Math.min(amount * game.washEfficiency, totalDirty - washedAmount);
+        washedAmount += washFromThis;
+    });
+    
+    const cleanMoney = sessionStats.walletEntries.reduce((sum, e) => {
+        return sum + (moneySources[e.source].clean ? e.amount : 0);
+    }, 0);
+    
+    const totalDeposit = cleanMoney;
+    const projectedTurnover = totalDeposit > 0 ? totalWagering / totalDeposit : 0;
+    const washedPercent = totalDirty > 0 ? (washedAmount / totalDirty) * 100 : 0;
+    
+    if (projectedWageringEl) projectedWageringEl.textContent = `$${totalWagering.toFixed(2)}`;
+    if (projectedTurnoverEl) projectedTurnoverEl.textContent = `${projectedTurnover.toFixed(1)}x`;
+    if (projectedWashedEl) projectedWashedEl.textContent = `${washedPercent.toFixed(0)}%`;
+    
+    // Update health projection
+    updateHealthProjection(totalWagering, projectedTurnover, washedPercent, totalDirty);
+}
+
+function updateHealthProjection(totalWagering, turnover, washedPercent, totalDirty) {
+    if (!healthStatus) return;
+    
+    let statusHTML = '<h3 style="color: #fbbf24; margin-bottom: 15px;">📊 Account Health Projection</h3>';
+    
+    if (totalWagering === 0) {
+        statusHTML += '<div style="color: #94a3b8; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;">Add activities to see health projection.</div>';
+    } else {
+        // Turnover assessment
+        if (turnover >= 5) {
+            statusHTML += `<div style="color: #22c55e; margin-bottom: 10px; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border-left: 3px solid #22c55e;">
+                <strong>✅ Excellent Turnover:</strong> ${turnover.toFixed(1)}x. Safe to withdraw using Method B.
+            </div>`;
+        } else if (turnover >= 2) {
+            statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 3px solid #fbbf24;">
+                <strong>⚠️ Moderate Turnover:</strong> ${turnover.toFixed(1)}x. Consider adding more activities to reach 5x+.
+            </div>`;
+        } else {
+            statusHTML += `<div style="color: #f87171; margin-bottom: 10px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 3px solid #ef4444;">
+                <strong>🚨 Low Turnover:</strong> ${turnover.toFixed(1)}x. High risk. Add more activities before withdrawing.
+            </div>`;
+        }
+        
+        // Washing assessment
+        if (totalDirty > 0) {
+            if (washedPercent >= 100) {
+                statusHTML += `<div style="color: #22c55e; margin-bottom: 10px; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border-left: 3px solid #22c55e;">
+                    <strong>✅ All Dirty Money Washed:</strong> ${washedPercent.toFixed(0)}% of dirty money will be cleaned.
+                </div>`;
+            } else if (washedPercent >= 50) {
+                statusHTML += `<div style="color: #fbbf24; margin-bottom: 10px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 3px solid #fbbf24;">
+                    <strong>⚠️ Partial Wash:</strong> ${washedPercent.toFixed(0)}% washed. Add more activities to wash remaining ${(100 - washedPercent).toFixed(0)}%.
+                </div>`;
+            } else {
+                statusHTML += `<div style="color: #f87171; margin-bottom: 10px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 3px solid #ef4444;">
+                    <strong>🚨 Insufficient Washing:</strong> Only ${washedPercent.toFixed(0)}% washed. High risk of "Bonus Hunter" flag.
+                </div>`;
+            }
+        }
+        
+        // Strategy recommendation
+        const hasProgressive = sessionStats.plannedActivities.some(a => a.game === 'progressive-slots');
+        if (hasProgressive) {
+            statusHTML += `<div style="color: #60a5fa; margin-bottom: 10px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 3px solid #3b82f6;">
+                <strong>💡 Good Camouflage:</strong> Progressive slots make you look like a gambler, not a grinder.
+            </div>`;
+        }
+    }
+    
+    healthStatus.innerHTML = statusHTML;
+    healthStatus.style.display = 'block';
+}
+
+// Event listeners
+if (addWalletEntryBtn) {
+    addWalletEntryBtn.addEventListener('click', () => {
+        addWalletEntry(0, 'fresh-deposit');
+    });
+}
+
+if (addActivityBtn) {
+    addActivityBtn.addEventListener('click', () => {
+        addPlannedActivity('progressive-slots', 0);
+    });
+}
+
+// Initialize wallet system (runs after DOM ready)
+function initWalletSystem() {
+    if (walletEntriesEl && addWalletEntryBtn) {
+        renderWalletEntries();
+        renderPlannedActivities();
+        updateWalletSummary();
+        updateMixingBowl();
+        updateProjections();
+    }
+}
+
+// Consolidated initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-    initCraps();
-    initPoker();
+    // Initialize tabs first
+    initTabs();
+    
+    // Auto-login Tyler
+    currentUser = loadUserProfile("Tyler");
+    updateUIForLogin();
+    
+    // Initialize other systems - use setTimeout to ensure DOM is fully ready
+    setTimeout(() => {
+        initCraps();
+        initPoker();
+        initWalletSystem();
+    }, 50);
 });
 

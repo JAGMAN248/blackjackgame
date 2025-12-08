@@ -76,7 +76,7 @@
             <button id="reset-count-btn" class="btn btn-small">Reset Count</button>
         </div>
         </div>
-    </div>
+    </div> <!-- End sidebar-container -->
     <div class="container">
         <header>
             <h1>♠️ Blackjack ♥️</h1>
@@ -239,29 +239,132 @@
 
     <!-- Tab 3: Health Dashboard -->
     <div id="tab-health" class="tab-pane">
-        <div class="dashboard-container">
-            <h2>❤️ Current Session Stats</h2>
-            <p>Monitor your "Wash" metrics for this specific session.</p>
+        <div class="dashboard-container" style="max-width: 1200px;">
+            <h2>❤️ Money Lifecycle Tracker</h2>
+            <p style="color: #94a3b8;">Track where your money came from, plan how to play it, and see your account health projection.</p>
             
-            <div class="health-stats">
-                <div class="stat-box">
-                    <label>Session Deposited</label>
-                    <input type="number" id="health-deposit" value="0">
+            <!-- Section 1: The Wallet (Source of Funds) -->
+            <div class="wallet-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">💰 The Wallet: Where Did This Money Come From?</h3>
+                
+                <div id="wallet-entries" class="wallet-entries">
+                    <!-- Wallet entries will be added dynamically -->
                 </div>
-                <div class="stat-box">
-                    <label>Session Casino Play</label>
-                    <input type="number" id="health-casino" value="0">
-                </div>
-                <div class="stat-box">
-                    <label>Session Sports Play</label>
-                    <input type="number" id="health-sports" value="0">
-                </div>
-                <div class="stat-box">
-                    <label>Session Withdrawn</label>
-                    <input type="number" id="health-withdraw" value="0">
+                
+                <button id="add-wallet-entry-btn" class="btn btn-small" style="margin-top: 15px; width: 100%;">
+                    + Add Money Source
+                </button>
+                
+                <div class="wallet-summary" style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 3px solid #3b82f6;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #cbd5e1; font-weight: bold;">Total Bankroll:</span>
+                        <span id="total-bankroll" style="color: #60a5fa; font-size: 1.3em; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; justify-content: space-between; font-size: 0.9em;">
+                        <span style="color: #94a3b8;">Clean Money:</span>
+                        <span id="clean-money-total" style="color: #22c55e;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9em;">
+                        <span style="color: #94a3b8;">Dirty Money:</span>
+                        <span id="dirty-money-total" style="color: #f87171;">$0.00</span>
+                    </div>
                 </div>
             </div>
-            <div id="health-status" class="health-status"></div>
+            
+            <!-- Section 2: The Mixing Bowl (Visual) -->
+            <div class="mixing-bowl-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">🔄 The Mixing Bowl: Washing Process</h3>
+                
+                <div class="mixing-bowl-visual" style="margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="color: #cbd5e1; font-size: 0.9em;">Dirty Money (Needs Washing)</span>
+                            <span id="dirty-percentage" style="color: #f87171; font-weight: bold;">0%</span>
+                        </div>
+                        <div class="wash-bar" style="width: 100%; height: 30px; background: rgba(0, 0, 0, 0.5); border-radius: 15px; overflow: hidden; position: relative;">
+                            <div id="dirty-bar" style="height: 100%; background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); width: 0%; transition: width 0.3s;"></div>
+                            <div id="clean-bar" style="height: 100%; background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); width: 0%; transition: width 0.3s; position: absolute; top: 0; right: 0;"></div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; font-size: 0.85em; color: #94a3b8;">
+                        <div id="wash-status">No dirty money to wash yet.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 3: The Session Planner -->
+            <div class="session-planner-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">📋 Plan Your Play: How Will You Wash It?</h3>
+                
+                <div id="planned-activities" class="planned-activities">
+                    <!-- Planned activities will be added here -->
+                </div>
+                
+                <button id="add-activity-btn" class="btn btn-small" style="margin-top: 15px; width: 100%;">
+                    + Add Activity
+                </button>
+                
+                <div class="activity-summary" style="margin-top: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 3px solid #fbbf24;">
+                    <div style="color: #fbbf24; font-weight: bold; margin-bottom: 10px;">Projected Results:</div>
+                    <div id="projected-stats" style="font-size: 0.9em; color: #cbd5e1; line-height: 1.8;">
+                        <div>Total Planned Wagering: <strong id="projected-wagering" style="color: #60a5fa;">$0.00</strong></div>
+                        <div>Projected Turnover: <strong id="projected-turnover" style="color: #60a5fa;">0.0x</strong></div>
+                        <div>Dirty Money Washed: <strong id="projected-washed" style="color: #22c55e;">0%</strong></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 4: Account Health Projection -->
+            <div id="health-status" class="health-status" style="margin-top: 25px;"></div>
+            
+            <!-- Legacy Free Spins Section (Hidden but kept for backward compatibility) -->
+            <div class="free-spins-section" style="display: none;">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">🎰 Free Spins Tracker</h3>
+                
+                <div class="stat-box" style="margin-bottom: 15px;">
+                    <label>Available Free Spins</label>
+                    <input type="number" id="health-free-spins" value="0" min="0" step="1">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; color: #cbd5e1;">Spend Free Spins On:</label>
+                    <select id="free-spins-game" class="form-control" style="margin-bottom: 10px;">
+                        <option value="slots">Slots ($1 per spin)</option>
+                        <option value="blackjack">Blackjack ($5 per spin)</option>
+                        <option value="roulette">Roulette ($2 per spin)</option>
+                        <option value="video-poker">Video Poker ($3 per spin)</option>
+                    </select>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="free-spins-amount" value="1" min="1" step="1" style="flex: 1; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="spend-free-spins-btn" class="btn btn-small" style="flex: 1;">Spend Spins</button>
+                    </div>
+                </div>
+                
+                <div id="free-spins-result" style="margin-top: 10px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; display: none; color: #60a5fa; font-size: 0.9em;"></div>
+                
+                <!-- Free Spin Winnings Tracker -->
+                <div style="margin-top: 15px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 3px solid #fbbf24;">
+                    <label style="display: block; margin-bottom: 8px; color: #fbbf24; font-weight: bold;">Record Free Spin Winnings</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="free-spin-winnings" value="0" min="0" step="0.01" placeholder="Won amount" style="flex: 1; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="record-winnings-btn" class="btn btn-small" style="flex: 1;">Record Win</button>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.85em; color: #cbd5e1;">
+                        💡 <strong>Strategy:</strong> If you win from free spins, record it here. The system will warn you if you need to "churn" before withdrawing.
+                    </div>
+                </div>
+                
+                <!-- Strategic Advice Panel -->
+                <div id="free-spins-advice" style="margin-top: 15px; padding: 12px; background: rgba(0, 0, 0, 0.4); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.85em; color: #94a3b8; line-height: 1.6;">
+                    <strong style="color: #60a5fa; display: block; margin-bottom: 8px;">📋 Free Spin Strategy Guide</strong>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li><strong>Mix Cash & Free:</strong> Play $20-50 cash before using free spins to avoid "risk-averse" flag</li>
+                        <li><strong>Churn Winnings:</strong> If you win from free spins, play through 50%+ before withdrawing</li>
+                        <li><strong>Deposit Padding:</strong> Make a clean deposit (no bonus) before heavy free spin usage</li>
+                        <li><strong>Progressive Slots:</strong> Excellent camouflage - casinos love players chasing jackpots</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
