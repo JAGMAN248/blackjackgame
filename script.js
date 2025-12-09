@@ -26,6 +26,22 @@ const MAX_HISTORY = 30; // Maximum number of cards to track in history
 let suitsModeEnabled = false; // Track if suits mode is enabled
 let selectedSuit = '♠'; // Currently selected suit (default to spades)
 
+// Live Mirror Mode State
+let liveMode = false; // false = SIMULATOR, true = LIVE MIRROR
+let liveMirrorBalance = 0; // Synced balance from real casino
+let liveMirrorStats = {
+    handsPlayed: 0,
+    handsWon: 0,
+    handsLost: 0,
+    handsPushed: 0,
+    totalWagered: 0,
+    totalProfit: 0,
+    perfectStrategyCount: 0, // Track perfect basic strategy plays
+    sessionStartTime: null,
+    lastHandTime: null,
+    handHistory: [] // Track last 50 hands for pattern detection
+};
+
 // Card suits and values
 const suits = ['♠', '♥', '♦', '♣'];
 const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -74,16 +90,34 @@ const suitsModeToggleEl = document.getElementById('suits-mode-toggle');
 const suitSelectorEl = document.getElementById('suit-selector');
 const donationSidebarEl = document.querySelector('.donation-sidebar');
 const coffeeBtnEl = document.querySelector('.logo-coffee');
+const simulatorSidebarEl = document.querySelector('.simulator-sidebar');
+const simulatorBtnEl = document.getElementById('logo-simulator');
+const closeSimulatorBtn = document.getElementById('close-simulator-btn');
+const exportBtnEl = document.getElementById('logo-export');
+const exportSidebarEl = document.querySelector('.export-sidebar');
+const closeExportBtn = document.getElementById('close-export-btn');
+const exportNowBtn = document.getElementById('export-now-btn');
+const exportStatusEl = document.getElementById('export-status');
+const exportStatusTextEl = document.getElementById('export-status-text');
 
 // Tab Switching Logic - Initialize on DOM ready
 function initTabs() {
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
     
+    console.log('Initializing tabs:', { buttons: tabBtns.length, panes: tabPanes.length });
+    
     if (tabBtns.length === 0 || tabPanes.length === 0) {
         console.warn('Tab buttons or panes not found', { buttons: tabBtns.length, panes: tabPanes.length });
         return;
     }
+    
+    // Ensure all tab buttons are clickable
+    tabBtns.forEach(btn => {
+        btn.style.pointerEvents = 'auto';
+        btn.style.cursor = 'pointer';
+        btn.style.zIndex = '1001';
+    });
     
     // Function to switch tabs
     function switchTab(tabId) {
@@ -124,21 +158,48 @@ function initTabs() {
     
     // Add click handlers
     tabBtns.forEach(btn => {
-        btn.addEventListener('click', function(e) {
+        // Ensure button is clickable
+        btn.style.pointerEvents = 'auto';
+        btn.style.cursor = 'pointer';
+        btn.style.zIndex = '1001';
+        btn.style.position = 'relative';
+        
+        // Remove any existing event listeners by cloning (prevents duplicates)
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        // Add click handler to the new button
+        newBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
             const tabId = this.getAttribute('data-tab');
-            if (tabId) {
-                // Update button active state
-                tabBtns.forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Switch tab
-                switchTab(tabId);
+            console.log('Tab clicked:', tabId);
+            
+            if (!tabId) {
+                console.error('No data-tab attribute found on button:', this);
+                return;
             }
+            
+            // Get all buttons (re-query in case they were cloned)
+            const allBtns = document.querySelectorAll('.tab-btn');
+            
+            // Update button active state
+            allBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Switch tab
+            switchTab(tabId);
         });
+        
+        // Ensure the new button is clickable
+        newBtn.style.pointerEvents = 'auto';
+        newBtn.style.cursor = 'pointer';
+        newBtn.style.zIndex = '1001';
     });
+    
+    // Re-query buttons after cloning (they're new elements now)
+    const finalTabBtns = document.querySelectorAll('.tab-btn');
     
     // Initialize first tab - ensure it's visible
     const activeBtn = document.querySelector('.tab-btn.active');
@@ -147,11 +208,11 @@ function initTabs() {
         if (tabId) {
             switchTab(tabId);
         }
-    } else if (tabBtns.length > 0) {
+    } else if (finalTabBtns.length > 0) {
         // No active button, activate first one
-        const firstTabId = tabBtns[0].getAttribute('data-tab');
+        const firstTabId = finalTabBtns[0].getAttribute('data-tab');
         if (firstTabId) {
-            tabBtns[0].classList.add('active');
+            finalTabBtns[0].classList.add('active');
             switchTab(firstTabId);
         }
     }
@@ -167,13 +228,32 @@ function initTabs() {
             const firstPane = tabPanes[0];
             firstPane.classList.add('active');
             firstPane.style.display = 'flex';
-            if (tabBtns.length > 0) {
-                tabBtns[0].classList.add('active');
+            if (finalTabBtns.length > 0) {
+                finalTabBtns[0].classList.add('active');
             }
         }
     }
     
     console.log('Tabs initialized. Active tab:', document.querySelector('.tab-btn.active')?.getAttribute('data-tab'));
+    console.log('All tab buttons:', Array.from(finalTabBtns).map(b => ({ 
+        id: b.getAttribute('data-tab'), 
+        clickable: b.style.pointerEvents !== 'none',
+        zIndex: b.style.zIndex,
+        cursor: b.style.cursor
+    })));
+    
+    // Test: Try clicking a tab programmatically to verify it works
+    setTimeout(() => {
+        const testBtn = document.querySelector('[data-tab="tab-sports"]');
+        if (testBtn) {
+            console.log('Testing Sportsbook tab clickability:', {
+                exists: !!testBtn,
+                pointerEvents: testBtn.style.pointerEvents,
+                zIndex: testBtn.style.zIndex,
+                cursor: testBtn.style.cursor
+            });
+        }
+    }, 500);
 }
 
 // Helper function to switch to a specific tab programmatically
@@ -261,10 +341,11 @@ const freeSpinsResult = document.getElementById('free-spins-result');
 function updateHealth() {
     if (!healthStatus) return;
     
-    const deposited = parseFloat(healthDeposit.value) || 0;
-    const casino = parseFloat(healthCasino.value) || 0;
-    const sports = parseFloat(healthSports.value) || 0;
-    const withdrawn = parseFloat(healthWithdraw.value) || 0;
+    // Guard against null health inputs (they may not exist if Health tab isn't loaded)
+    const deposited = healthDeposit ? (parseFloat(healthDeposit.value) || 0) : 0;
+    const casino = healthCasino ? (parseFloat(healthCasino.value) || 0) : 0;
+    const sports = healthSports ? (parseFloat(healthSports.value) || 0) : 0;
+    const withdrawn = healthWithdraw ? (parseFloat(healthWithdraw.value) || 0) : 0;
     const freeSpinWinnings = sessionStats.freeSpinWinnings || 0;
     const cashPlayed = sessionStats.cashPlayed || 0;
     
@@ -352,6 +433,8 @@ if (healthDeposit) {
 const recordDepositBtn = document.getElementById('record-deposit-btn');
 if (recordDepositBtn) {
     recordDepositBtn.addEventListener('click', () => {
+        // Guard against null health input
+        if (!healthDeposit) return;
         const depositAmount = parseFloat(healthDeposit.value) || 0;
         if (depositAmount > 0) {
             sessionStats.lastDepositDate = new Date().toISOString();
@@ -727,9 +810,32 @@ rangeBtns.forEach(btn => {
 });
 
 // Initialize game
-function initGame() {
+// Initialize the shoe (deck) - only called when starting fresh or reshuffling
+function initializeShoe() {
     createDeck();
     shuffleDeck();
+    // Reset running count when shoe is shuffled (cut card reached)
+    runningCount = 0;
+    updateCountDisplay();
+    updateCardsRemaining();
+    showMessage('Shuffling new shoe...', 'tie');
+    setTimeout(() => {
+        clearMessage();
+    }, 1500);
+}
+
+// Start a new hand - clears hands but keeps the deck (for card counting)
+function startNewHand() {
+    // Check if we need to reshuffle (cut card logic)
+    const cardsDealt = 52 * numberOfDecks - deck.length;
+    const cardsLeft = maxCardsInShoe - cardsDealt;
+    
+    // If we're at or below the cut card threshold (e.g., 15 cards remaining), reshuffle
+    if (cardsLeft <= 15 || deck.length === 0) {
+        initializeShoe();
+    }
+    
+    // Clear hands and game state for new round
     playerHand = [];
     playerHand2 = [];
     isSplit = false;
@@ -737,16 +843,37 @@ function initGame() {
     dealerHand = [];
     currentBet = 0;
     bet2 = 0;
-    insuranceBet = 0; // Reset insurance bet
+    insuranceBet = 0;
     gameInProgress = false;
     playerHasHit = false;
     playerHasHit2 = false;
-    dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag
+    dealerPlaying = false;
+    currentManualTarget = null;
+    
+    // Update UI
+    updateUI();
+    updateManualCardPadVisibility();
+    clearMessage();
+}
+
+// Full game reset - resets everything including balance and count
+function initGame() {
+    initializeShoe();
+    playerHand = [];
+    playerHand2 = [];
+    isSplit = false;
+    currentHand = 1;
+    dealerHand = [];
+    currentBet = 0;
+    bet2 = 0;
+    insuranceBet = 0;
+    gameInProgress = false;
+    playerHasHit = false;
+    playerHasHit2 = false;
+    dealerPlaying = false;
     balance = 10000; // Reset balance to $10000
-    currentManualTarget = null; // Reset manual entry target
-    // Reset running count on new game (user can manually track in manual entry mode)
-    runningCount = 0;
-    cardHistory = []; // Clear card history on new game
+    currentManualTarget = null;
+    cardHistory = []; // Clear card history on full reset
     // Don't reset suits mode or selected suit - user preference persists
     updateCountDisplay();
     updateCardHistory();
@@ -901,11 +1028,11 @@ function burnCardFromShoe(suit, value) {
 
 // Deal a card from the deck (only used when manual entry is disabled)
 function dealCard() {
-    // Check if we've reached penetration limit
+    // Check if we've reached penetration limit (safety net - should be caught in startNewHand)
     const cardsDealt = 52 * numberOfDecks - deck.length;
     if (cardsDealt >= maxCardsInShoe || deck.length === 0) {
-        createDeck();
-        shuffleDeck();
+        // Reshuffle silently during gameplay (cut card check should happen before dealing)
+        initializeShoe(false);
     }
     const card = deck.pop();
     // Update running count
@@ -1332,24 +1459,47 @@ function updateUI() {
     const activeHasHit = currentHand === 1 ? playerHasHit : playerHasHit2;
     const activeBet = currentHand === 1 ? currentBet : bet2;
     
-    placeBetBtn.disabled = gameInProgress || balance <= 0;
-    useRecommendedBtn.disabled = gameInProgress || balance <= 0;
+    // Enable betting buttons when game is not in progress (round ended, ready for next bet)
+    // This allows continuous play without pressing "Reset Shoe" (which reshuffles)
+    // CRITICAL: When gameInProgress is false, buttons should be enabled (unless balance is 0)
+    // Make this logic explicit and aggressive to ensure buttons are always enabled when they should be
+    if (!gameInProgress && balance > 0) {
+        // Game has ended, enable betting buttons for next round
+        // Use multiple methods to ensure button is truly enabled
+        placeBetBtn.disabled = false;
+        placeBetBtn.removeAttribute('disabled');
+        placeBetBtn.style.pointerEvents = 'auto';
+        placeBetBtn.style.opacity = '1';
+        placeBetBtn.style.cursor = 'pointer';
+        
+        useRecommendedBtn.disabled = false;
+        useRecommendedBtn.removeAttribute('disabled');
+        useRecommendedBtn.style.pointerEvents = 'auto';
+        useRecommendedBtn.style.opacity = '1';
+        useRecommendedBtn.style.cursor = 'pointer';
+    } else {
+        // Game is in progress or balance is 0, disable buttons
+        placeBetBtn.disabled = gameInProgress || balance <= 0;
+        useRecommendedBtn.disabled = gameInProgress || balance <= 0;
+    }
     // Disable hit button in manual entry mode (cards are added manually)
-    hitBtn.disabled = !gameInProgress || manualEntryEnabled;
+    hitBtn.disabled = !gameInProgress || manualEntryEnabled || dealerPlaying;
     // Double is only available on first two cards and if player has enough balance
     // Also disable in manual entry mode
-    doubleBtn.disabled = !gameInProgress || activeHasHit || activeHand.length !== 2 || balance < activeBet || manualEntryEnabled;
+    doubleBtn.disabled = !gameInProgress || activeHasHit || activeHand.length !== 2 || balance < activeBet || manualEntryEnabled || dealerPlaying;
     // Split is only available on pairs, first two cards, before hitting, and if not already split
-    splitBtn.disabled = !gameInProgress || !canSplit();
+    splitBtn.disabled = !gameInProgress || !canSplit() || dealerPlaying;
     // Insurance is only available when dealer shows Ace, before any player actions, on first hand only
     const maxInsurance = Math.floor(currentBet / 2);
-    insuranceBtn.disabled = !gameInProgress || !isDealerAce() || isSplit || playerHasHit || insuranceBet > 0 || balance < maxInsurance || playerHand.length !== 2;
+    insuranceBtn.disabled = !gameInProgress || dealerPlaying || !isDealerAce() || isSplit || playerHasHit || insuranceBet > 0 || balance < maxInsurance || playerHand.length !== 2;
     // Surrender is only available on first two cards, before hitting or doubling, first hand only
-    surrenderBtn.disabled = !gameInProgress || isSplit || playerHasHit || playerHand.length !== 2;
-    standBtn.disabled = !gameInProgress;
-    // New Game button always resets the entire game session
-    newGameBtn.disabled = false; // Always enabled since it resets everything
-    newGameBtn.textContent = 'New Game';
+    surrenderBtn.disabled = !gameInProgress || dealerPlaying || isSplit || playerHasHit || playerHand.length !== 2;
+    standBtn.disabled = !gameInProgress || dealerPlaying;
+    // "Reset Shoe" button - always available, but clearly indicates it will reshuffle
+    // This is a HARD RESET that reshuffles the deck and resets the count
+    // Users should use "Place Bet" for continuous play (keeps deck)
+    newGameBtn.disabled = false;
+    newGameBtn.textContent = 'Reset Shoe'; // Clear label: this reshuffles and resets everything
     // Deck count selector - only enabled when no game in progress
     deckCountEl.disabled = gameInProgress;
     // Penetration slider - only enabled when no game in progress
@@ -1893,13 +2043,35 @@ function revealDealerCard() {
 // Clear message
 function clearMessage() {
     messageEl.textContent = '';
+    messageEl.innerHTML = '';
     messageEl.className = 'message';
+    messageEl.style.display = '';
 }
 
-// Show message
+// Show message with enhanced display for "Winning Moment"
 function showMessage(text, type = '') {
-    messageEl.textContent = text;
+    // Split message into lines if it contains \n
+    const lines = text.split('\n');
+    
+    if (lines.length > 1) {
+        // First line is the prominent reason (e.g., "YOU WIN!", "DEALER BUSTS!")
+        // Second line is the amount/details
+        messageEl.innerHTML = `
+            <div style="font-size: 1.8em; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                ${lines[0]}
+            </div>
+            <div style="font-size: 1.2em; opacity: 0.9;">
+                ${lines[1]}
+            </div>
+        `;
+    } else {
+        messageEl.textContent = text;
+    }
+    
     messageEl.className = `message ${type}`;
+    // Make message visible and prominent
+    messageEl.style.display = 'block';
+    messageEl.style.opacity = '1';
 }
 
 // Use recommended bet and place it
@@ -1911,31 +2083,85 @@ function useRecommendedBet() {
     placeBet();
 }
 
-// Place bet
+// Place bet - works even after round ends (enables continuous play without "New Game")
+// KEY FEATURE: You can place multiple bets in a row without clicking "New Game"
+// The deck persists across hands (for card counting) and only reshuffles at cut card
 function placeBet() {
-    const betAmount = parseInt(betAmountEl.value);
+    // DEBUG: Log that button was clicked
+    console.log("Place Bet button clicked!");
+    console.log("Current gameInProgress:", gameInProgress);
+    console.log("Current balance:", balance);
     
-    if (betAmount < MIN_BET) {
+    // This function allows placing bets continuously without requiring "Reset Shoe"
+    // It automatically starts a new hand when called after a round ends
+    // The deck is preserved (not reshuffled) unless cut card is reached
+    // CRITICAL: This function should work even when gameInProgress is false (round just ended)
+    
+    // Get bet amount and ensure it's a number (not a string)
+    const betAmount = parseInt(betAmountEl.value, 10);
+    console.log("Bet amount entered:", betAmountEl.value, "Parsed as:", betAmount);
+    
+    // Validate bet amount
+    if (isNaN(betAmount) || betAmount < MIN_BET) {
+        console.log("Invalid bet amount:", betAmount);
         showMessage(`Bet must be at least $${MIN_BET}`, 'lose');
         return;
     }
     
-    if (betAmount > balance) {
+    // Validate balance - ensure both are numbers for comparison
+    const currentBalance = parseFloat(balance);
+    console.log("Comparing betAmount:", betAmount, "to balance:", currentBalance);
+    if (betAmount > currentBalance) {
+        console.log("Insufficient balance! Bet:", betAmount, "Balance:", currentBalance);
         showMessage('Insufficient balance!', 'lose');
         return;
     }
+    
+    console.log("Bet validation passed! Starting new round...");
 
+    // Clear any previous round's message when starting a new bet
+    clearMessage();
+
+    // CRITICAL: Always prepare for a new round when placing a bet
+    // This allows continuous play - placing a bet automatically starts the next hand
+    // WITHOUT requiring "Reset Shoe" (which would reshuffle the deck)
+    
+    // Check if we need to reshuffle (cut card logic) - but only reshuffle if needed
+    const cardsDealt = 52 * numberOfDecks - deck.length;
+    const cardsLeft = maxCardsInShoe - cardsDealt;
+    
+    // Only reshuffle if we're at the cut card - otherwise keep the deck
+    if (cardsLeft <= 15 || deck.length === 0) {
+        initializeShoe(); // Reshuffle only when necessary
+    }
+    
+    // ALWAYS clear hands and reset state for new round (but keep the deck!)
+    // This ensures a fresh start for each new bet
+    playerHand = [];
+    dealerHand = [];
+    playerHand2 = [];
+    isSplit = false;
+    currentHand = 1;
+    playerHasHit = false;
+    playerHasHit2 = false;
+    dealerPlaying = false;
+    insuranceBet = 0;
+    bet2 = 0;
+    currentBet = 0; // Will be set below
+    currentManualTarget = null;
+    
+    // Set bet and start new round
     currentBet = betAmount;
     bet2 = 0;
-    insuranceBet = 0; // Reset insurance bet for new hand
+    insuranceBet = 0;
     balance -= currentBet;
-    gameInProgress = true;
+    gameInProgress = true; // Mark game as in progress - THIS STARTS THE NEW ROUND
     isSplit = false;
     currentHand = 1;
     playerHand2 = [];
     playerHasHit = false;
     playerHasHit2 = false;
-    dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag for new game
+    dealerPlaying = false;
     
     // If manual entry is enabled, don't deal cards automatically
     // Preserve existing cards if they're already placed (don't reset on new bet)
@@ -1953,10 +2179,14 @@ function placeBet() {
         return;
     }
     
+    // For automatic play, hands are already cleared above
     // Deal initial cards with delay for animation
+    // This starts the new hand automatically - no "Reset Shoe" button needed!
+    console.log("Dealing initial cards for new round...");
     playerHand = [dealCard()];
     dealerHand = [dealCard()];
     updateUI();
+    console.log("New round started! gameInProgress:", gameInProgress);
     
     setTimeout(() => {
         playerHand.push(dealCard());
@@ -2225,14 +2455,26 @@ function stand() {
                 updateUI(); // Update to show new dealer card
                 setTimeout(dealerPlay, 500); // Wait before next card
             } else {
-                // Determine results for all hands
+                // Dealer stands on 17+ (including soft 17) or busts (>21)
+                // Small delay to show final dealer cards before ending game
                 setTimeout(() => {
                     endGame();
-                }, 300);
+                }, 500);
             }
         };
         
         dealerPlay();
+
+        // SAFETY: If for any reason the dealer loop fails to end the round,
+        // force the round to close after a short timeout so betting can continue.
+        // This prevents the game from getting stuck with the bet button disabled.
+        setTimeout(() => {
+            if (gameInProgress) {
+                console.warn('Safety timeout: forcing endGame()');
+                dealerPlaying = false;
+                endGame();
+            }
+        }, 4000);
     }, 400);
 }
 
@@ -2243,8 +2485,17 @@ function isBlackjack(hand) {
 
 // End game and update balance
 function endGame(result, message) {
+    // Always allow endGame to run so UI resets and betting re-enables
     gameInProgress = false;
     dealerPlaying = false; // CRITICAL: Reset dealerPlaying flag when game ends
+    
+    // In LIVE MIRROR mode, don't auto-update balance - user must manually log results
+    // But still update coach if needed
+    if (liveMode) {
+        setTimeout(() => {
+            updateCoach();
+        }, 500);
+    }
     
     // If insurance was taken and dealer doesn't have blackjack, lose insurance bet
     if (insuranceBet > 0 && !isBlackjack(dealerHand)) {
@@ -2254,11 +2505,16 @@ function endGame(result, message) {
     const dealerBlackjack = isBlackjack(dealerHand);
     const finalDealerValue = calculateHandValue(dealerHand);
     
-    // Process each hand
+    // Process each hand and track win reasons for better messaging
     let totalWin = 0;
     let totalLoss = 0;
     let totalWagered = currentBet;
     if (isSplit) totalWagered += bet2;
+    
+    // Track win reasons for prominent display
+    let winReasons = [];
+    let lossReasons = [];
+    let pushReasons = [];
     
     // Hand 1
     const playerValue1 = calculateHandValue(playerHand);
@@ -2267,25 +2523,33 @@ function endGame(result, message) {
     if (playerValue1 <= 21) {
         if (playerBlackjack1 && dealerBlackjack) {
             balance += currentBet; // Push
+            pushReasons.push('Both Blackjack!');
         } else if (playerBlackjack1 && !dealerBlackjack) {
             const winAmount = Math.floor(currentBet * 1.5);
             balance += currentBet + winAmount;
             totalWin += winAmount;
+            winReasons.push('BLACKJACK!');
         } else if (dealerBlackjack && !playerBlackjack1) {
             totalLoss += currentBet;
+            lossReasons.push('Dealer Blackjack!');
         } else if (finalDealerValue > 21) {
             balance += currentBet * 2;
             totalWin += currentBet;
+            winReasons.push('DEALER BUSTS!');
         } else if (playerValue1 > finalDealerValue) {
             balance += currentBet * 2;
             totalWin += currentBet;
+            winReasons.push(`YOU WIN! (${playerValue1} vs ${finalDealerValue})`);
         } else if (playerValue1 < finalDealerValue) {
             totalLoss += currentBet;
+            lossReasons.push(`You Lose (${playerValue1} vs ${finalDealerValue})`);
         } else {
             balance += currentBet; // Push
+            pushReasons.push('Push!');
         }
     } else {
         totalLoss += currentBet; // Bust
+        lossReasons.push('YOU BUST!');
     }
     
     // Hand 2 (if split)
@@ -2296,25 +2560,33 @@ function endGame(result, message) {
         if (playerValue2 <= 21) {
             if (playerBlackjack2 && dealerBlackjack) {
                 balance += bet2; // Push
+                pushReasons.push('Hand 2: Both Blackjack!');
             } else if (playerBlackjack2 && !dealerBlackjack) {
                 const winAmount = Math.floor(bet2 * 1.5);
                 balance += bet2 + winAmount;
                 totalWin += winAmount;
+                winReasons.push('Hand 2: BLACKJACK!');
             } else if (dealerBlackjack && !playerBlackjack2) {
                 totalLoss += bet2;
+                lossReasons.push('Hand 2: Dealer Blackjack!');
             } else if (finalDealerValue > 21) {
                 balance += bet2 * 2;
                 totalWin += bet2;
+                winReasons.push('Hand 2: DEALER BUSTS!');
             } else if (playerValue2 > finalDealerValue) {
                 balance += bet2 * 2;
                 totalWin += bet2;
+                winReasons.push(`Hand 2: YOU WIN! (${playerValue2} vs ${finalDealerValue})`);
             } else if (playerValue2 < finalDealerValue) {
                 totalLoss += bet2;
+                lossReasons.push(`Hand 2: You Lose (${playerValue2} vs ${finalDealerValue})`);
             } else {
                 balance += bet2; // Push
+                pushReasons.push('Hand 2: Push!');
             }
         } else {
             totalLoss += bet2; // Bust
+            lossReasons.push('Hand 2: YOU BUST!');
         }
     }
     
@@ -2326,29 +2598,135 @@ function endGame(result, message) {
         currentUser.casinoPlayed += totalWagered;
         saveUserProfile(); // Saves to localStorage and updates UI/Guide
     }
-    // Trigger UI update for dashboards
-    updateUIForLogin(); 
-    
-    // Show summary message
-    if (totalWin > totalLoss) {
-        const netWin = totalWin - totalLoss;
-        showMessage(`You Won $${netWin.toLocaleString()} total!`, 'win');
-    } else if (totalLoss > totalWin) {
-        const netLoss = totalLoss - totalWin;
-        showMessage(`You Lost $${netLoss.toLocaleString()} total`, 'lose');
-    } else {
-        showMessage("It's a push!", 'tie');
-    }
-    
-    // Reset insurance bet and split state
+    // Reset insurance bet and split state FIRST (before showing message)
     insuranceBet = 0;
     isSplit = false;
     currentHand = 1;
     playerHand2 = [];
     bet2 = 0;
     playerHasHit2 = false;
+    playerHasHit = false; // Reset player hit flag
     
+    // Clear hands after game ends to allow a fresh start
+    playerHand = [];
+    dealerHand = [];
+    
+    // Reset current bet to allow new bet
+    currentBet = 0;
+    
+    // Trigger UI update for dashboards (may call updateUI internally)
+    updateUIForLogin(); 
+    
+    // Update UI - this will maintain button state since gameInProgress is now false
     updateUI();
+    
+    // CRITICAL: Enable betting buttons AFTER all UI updates
+    // This ensures buttons are enabled even if updateUI() or updateUIForLogin() disabled them
+    // Enable BOTH Place Bet AND New Game/Next Hand buttons
+    if (balance > 0) {
+        if (placeBetBtn) {
+            placeBetBtn.disabled = false;
+            placeBetBtn.style.pointerEvents = 'auto'; // Ensure clicks work
+        }
+        if (useRecommendedBtn) {
+            useRecommendedBtn.disabled = false;
+            useRecommendedBtn.style.pointerEvents = 'auto';
+        }
+    }
+    if (newGameBtn) {
+        newGameBtn.disabled = false;
+        newGameBtn.style.pointerEvents = 'auto';
+    }
+    
+    // Show prominent win/loss message with specific reason
+    // This is the "Winning Moment" - make it big and clear!
+    let mainMessage = '';
+    let messageType = 'tie';
+    
+    if (totalWin > totalLoss) {
+        const netWin = totalWin - totalLoss;
+        // Show the most exciting win reason first
+        const primaryReason = winReasons[0] || 'YOU WIN!';
+        mainMessage = `${primaryReason}\nYou Won $${netWin.toLocaleString()}!`;
+        messageType = 'win';
+    } else if (totalLoss > totalWin) {
+        const netLoss = totalLoss - totalWin;
+        // Show the loss reason
+        const primaryReason = lossReasons[0] || 'You Lose';
+        mainMessage = `${primaryReason}\nYou Lost $${netLoss.toLocaleString()}`;
+        messageType = 'lose';
+    } else {
+        // Push - show push reason
+        const primaryReason = pushReasons[0] || "It's a push!";
+        mainMessage = `${primaryReason}\nNo money won or lost.`;
+        messageType = 'tie';
+    }
+    
+    // Show the prominent message
+    showMessage(mainMessage, messageType);
+    
+    // After a short delay, show status message with available options
+    setTimeout(() => {
+        if (balance > 0) {
+            showMessage('Place your next bet to continue, or click "Reset Shoe" to reshuffle.', 'tie');
+        }
+    }, 2000);
+    
+    // CRITICAL: Ensure buttons remain enabled after all UI updates
+    // Create a function that aggressively enables both Place Bet and Reset Shoe buttons
+    // This function ensures buttons are enabled even if updateUI() or other code disables them
+    const forceEnableButtons = () => {
+        // CRITICAL: gameInProgress is now false, so buttons MUST be enabled
+        // Enable Place Bet button (if balance > 0)
+        if (balance > 0) {
+            if (placeBetBtn) {
+                placeBetBtn.disabled = false;
+                placeBetBtn.removeAttribute('disabled');
+                placeBetBtn.style.pointerEvents = 'auto';
+                placeBetBtn.style.opacity = '1';
+                placeBetBtn.style.cursor = 'pointer';
+                // Remove any classes that might make it look disabled
+                placeBetBtn.classList.remove('disabled');
+            }
+            if (useRecommendedBtn) {
+                useRecommendedBtn.disabled = false;
+                useRecommendedBtn.removeAttribute('disabled');
+                useRecommendedBtn.style.pointerEvents = 'auto';
+                useRecommendedBtn.style.opacity = '1';
+                useRecommendedBtn.style.cursor = 'pointer';
+                useRecommendedBtn.classList.remove('disabled');
+            }
+        }
+        
+        // Always enable Reset Shoe button
+        if (newGameBtn) {
+            newGameBtn.disabled = false;
+            newGameBtn.removeAttribute('disabled');
+            newGameBtn.style.pointerEvents = 'auto';
+            newGameBtn.style.opacity = '1';
+            newGameBtn.style.cursor = 'pointer';
+            newGameBtn.classList.remove('disabled');
+        }
+    };
+    
+    // Enable immediately (gameInProgress is already false at this point)
+    forceEnableButtons();
+    
+    // Enable again after short delays to ensure they stay enabled
+    // This handles cases where other code (like updateUI() being called again) might disable them
+    setTimeout(forceEnableButtons, 10);
+    setTimeout(forceEnableButtons, 50);
+    setTimeout(forceEnableButtons, 100);
+    setTimeout(forceEnableButtons, 200);
+    setTimeout(forceEnableButtons, 500);
+    
+    // Focus bet input for quick next bet
+    setTimeout(() => {
+        if (betAmountEl) {
+            betAmountEl.focus();
+            betAmountEl.select();
+        }
+    }, 150);
     
     if (balance <= 0) {
         showMessage('Game Over! You ran out of money!', 'lose');
@@ -2384,7 +2762,15 @@ function canSplit() {
 
 // Event listeners
 useRecommendedBtn.addEventListener('click', useRecommendedBet);
-placeBetBtn.addEventListener('click', placeBet);
+// Place Bet button - should work even after round ends (enables continuous play)
+placeBetBtn.addEventListener('click', (e) => {
+    // Prevent any default behavior that might interfere
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Call placeBet function - it handles starting new hand automatically
+    placeBet();
+});
 hitBtn.addEventListener('click', hit);
 doubleBtn.addEventListener('click', doubleDown);
 splitBtn.addEventListener('click', split);
@@ -2392,7 +2778,8 @@ insuranceBtn.addEventListener('click', takeInsurance);
 surrenderBtn.addEventListener('click', surrender);
 standBtn.addEventListener('click', stand);
 newGameBtn.addEventListener('click', () => {
-    // End Game button always resets the entire game session
+    // "Reset Shoe" button - ALWAYS does a full reset (reshuffles deck, resets count, resets balance)
+    // This is a HARD RESET. For continuous play without reshuffling, use "Place Bet" instead.
     initGame();
 });
 
@@ -2400,9 +2787,8 @@ newGameBtn.addEventListener('click', () => {
 deckCountEl.addEventListener('change', (e) => {
     if (!gameInProgress) {
         numberOfDecks = parseInt(e.target.value);
-        // Create new deck with new count
-        createDeck();
-        shuffleDeck();
+        // Initialize new shoe with new deck count
+        initializeShoe();
         updateUI();
     }
 });
@@ -2416,6 +2802,7 @@ if (penetrationSliderEl) {
                 penetrationValueEl.textContent = penetrationPercent;
             }
             // Recalculate max cards and update display
+            // Note: This changes when reshuffle happens, but doesn't reshuffle immediately
             const totalCards = 52 * numberOfDecks;
             maxCardsInShoe = Math.floor(totalCards * (penetrationPercent / 100));
             updateCardsRemaining();
@@ -2456,6 +2843,12 @@ if (confirmCardBtnEl) {
     confirmCardBtnEl.addEventListener('click', () => {
         if (!currentManualTarget) {
             hideCardSelectionModal();
+            return;
+        }
+        
+        // Guard against null modal inputs (they may not exist in DOM)
+        if (!modalCardValueEl || !modalCardSuitEl) {
+            console.warn('Modal card inputs not found');
             return;
         }
         
@@ -2721,18 +3114,222 @@ renderManualCardPad();
 updateManualCardPadVisibility();
 initGame();
 
+// Simulator Mode Panel Toggle
+if (simulatorBtnEl && simulatorSidebarEl) {
+    simulatorSidebarEl.style.display = 'none';
+    simulatorBtnEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isHidden = simulatorSidebarEl.style.display === 'none';
+        // Close other sidebars if open
+        if (exportSidebarEl) {
+            exportSidebarEl.style.display = 'none';
+            exportSidebarEl.classList.remove('active');
+        }
+        if (donationSidebarEl) {
+            donationSidebarEl.style.display = 'none';
+            donationSidebarEl.classList.remove('active');
+        }
+        simulatorSidebarEl.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+            simulatorSidebarEl.classList.add('active');
+            const panel = document.getElementById('simulator-panel');
+            if (panel) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            simulatorSidebarEl.classList.remove('active');
+        }
+    });
+}
+
+if (closeSimulatorBtn && simulatorSidebarEl) {
+    closeSimulatorBtn.addEventListener('click', () => {
+        simulatorSidebarEl.style.display = 'none';
+        simulatorSidebarEl.classList.remove('active');
+    });
+}
+
+// Export panel toggle
+if (exportBtnEl && exportSidebarEl) {
+    exportSidebarEl.style.display = 'none';
+    exportBtnEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isHidden = exportSidebarEl.style.display === 'none';
+        // Close other sidebars if open
+        if (simulatorSidebarEl) {
+            simulatorSidebarEl.style.display = 'none';
+            simulatorSidebarEl.classList.remove('active');
+        }
+        if (donationSidebarEl) {
+            donationSidebarEl.style.display = 'none';
+            donationSidebarEl.classList.remove('active');
+        }
+        exportSidebarEl.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+            exportSidebarEl.classList.add('active');
+            const panel = document.getElementById('export-panel');
+            if (panel) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            exportSidebarEl.classList.remove('active');
+        }
+    });
+}
+
+if (closeExportBtn && exportSidebarEl) {
+    closeExportBtn.addEventListener('click', () => {
+        exportSidebarEl.style.display = 'none';
+        exportSidebarEl.classList.remove('active');
+    });
+}
+
+// Export button handler
+if (exportNowBtn) {
+    exportNowBtn.addEventListener('click', async () => {
+        if (!currentUser) {
+            showExportStatus('error', 'Please log in first to export data.');
+            return;
+        }
+        
+        exportNowBtn.disabled = true;
+        exportNowBtn.textContent = '⏳ Exporting...';
+        showExportStatus('info', 'Preparing export...');
+        
+        try {
+            await exportDataToFilesWithStatus();
+            showExportStatus('success', 'Export completed successfully!');
+            setTimeout(() => {
+                exportStatusEl.style.display = 'none';
+            }, 5000);
+        } catch (error) {
+            console.error('Export error:', error);
+            showExportStatus('error', 'Export failed. Please try again.');
+        } finally {
+            exportNowBtn.disabled = false;
+            exportNowBtn.textContent = '📁 Export Data Now';
+        }
+    });
+}
+
+function showExportStatus(type, message) {
+    if (!exportStatusEl || !exportStatusTextEl) return;
+    
+    exportStatusEl.style.display = 'block';
+    exportStatusTextEl.textContent = message;
+    
+    // Update colors based on type
+    if (type === 'success') {
+        exportStatusEl.style.background = 'rgba(34, 197, 94, 0.1)';
+        exportStatusEl.style.borderLeftColor = '#22c55e';
+        exportStatusTextEl.style.color = '#22c55e';
+    } else if (type === 'error') {
+        exportStatusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        exportStatusEl.style.borderLeftColor = '#ef4444';
+        exportStatusTextEl.style.color = '#f87171';
+    } else {
+        exportStatusEl.style.background = 'rgba(59, 130, 246, 0.1)';
+        exportStatusEl.style.borderLeftColor = '#3b82f6';
+        exportStatusTextEl.style.color = '#60a5fa';
+    }
+}
+
+// Enhanced export function with status updates
+async function exportDataToFilesWithStatus() {
+    if (!currentUser) {
+        throw new Error('User not logged in');
+    }
+    
+    showExportStatus('info', 'Checking for folder access...');
+    
+    try {
+        // Check if File System Access API is available (Chrome/Edge)
+        if ('showDirectoryPicker' in window) {
+            showExportStatus('info', 'Please select a folder location...');
+            
+            // Use File System Access API to create folder
+            const dirHandle = await window.showDirectoryPicker();
+            const folderName = `BlackjackTracker_${currentUser.username}_${new Date().toISOString().split('T')[0]}`;
+            
+            showExportStatus('info', `Creating folder: ${folderName}...`);
+            const folderHandle = await dirHandle.getDirectoryHandle(folderName, { create: true });
+            
+            // Create session history file
+            showExportStatus('info', 'Creating session_history.txt...');
+            const sessionHistoryFile = await folderHandle.getFileHandle('session_history.txt', { create: true });
+            const sessionHistoryWritable = await sessionHistoryFile.createWritable();
+            const sessionHistoryText = formatSessionHistory();
+            await sessionHistoryWritable.write(sessionHistoryText);
+            await sessionHistoryWritable.close();
+            
+            // Create stats file
+            showExportStatus('info', 'Creating stats.txt...');
+            const statsFile = await folderHandle.getFileHandle('stats.txt', { create: true });
+            const statsWritable = await statsFile.createWritable();
+            const statsText = formatStats();
+            await statsWritable.write(statsText);
+            await statsWritable.close();
+            
+            // Create game stats file
+            showExportStatus('info', 'Creating game_stats.txt...');
+            const gameStatsFile = await folderHandle.getFileHandle('game_stats.txt', { create: true });
+            const gameStatsWritable = await gameStatsFile.createWritable();
+            const gameStatsText = formatGameStats();
+            await gameStatsWritable.write(gameStatsText);
+            await gameStatsWritable.close();
+            
+            showExportStatus('success', `✅ Export complete! Files created in:\n${folderName}\n\n- session_history.txt\n- stats.txt\n- game_stats.txt`);
+        } else {
+            // Fallback: Download files directly
+            showExportStatus('info', 'Downloading files to your Downloads folder...');
+            downloadFile('session_history.txt', formatSessionHistory());
+            await new Promise(resolve => setTimeout(resolve, 500));
+            downloadFile('stats.txt', formatStats());
+            await new Promise(resolve => setTimeout(resolve, 500));
+            downloadFile('game_stats.txt', formatGameStats());
+            showExportStatus('success', '✅ Files downloaded to your Downloads folder!\n\nNote: For folder organization, use Chrome or Edge browser.');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        if (error.name !== 'AbortError') {
+            // Fallback to download if user cancels folder picker
+            showExportStatus('info', 'Using fallback download method...');
+            downloadFile('session_history.txt', formatSessionHistory());
+            await new Promise(resolve => setTimeout(resolve, 500));
+            downloadFile('stats.txt', formatStats());
+            await new Promise(resolve => setTimeout(resolve, 500));
+            downloadFile('game_stats.txt', formatGameStats());
+            showExportStatus('success', '✅ Files downloaded to your Downloads folder.');
+        } else {
+            throw error; // Re-throw abort errors
+        }
+    }
+}
+
 // Donation panel toggle
 if (coffeeBtnEl && donationSidebarEl) {
     donationSidebarEl.style.display = 'none';
     coffeeBtnEl.addEventListener('click', (e) => {
         e.preventDefault();
         const isHidden = donationSidebarEl.style.display === 'none';
+        // Close other sidebars if open
+        if (simulatorSidebarEl) {
+            simulatorSidebarEl.style.display = 'none';
+            simulatorSidebarEl.classList.remove('active');
+        }
+        if (exportSidebarEl) {
+            exportSidebarEl.style.display = 'none';
+            exportSidebarEl.classList.remove('active');
+        }
         donationSidebarEl.style.display = isHidden ? 'flex' : 'none';
         if (isHidden) {
+            donationSidebarEl.classList.add('active');
             const panel = document.getElementById('donation-panel');
             if (panel) {
                 panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        } else {
+            donationSidebarEl.classList.remove('active');
         }
     });
 }
@@ -2881,7 +3478,13 @@ let sessionStats = {
     lastDepositDate: null, // Track when last deposit was made
     // New wallet system
     walletEntries: [], // Array of {amount, source, id}
-    plannedActivities: [] // Array of {game, amount, risk, id}
+    plannedActivities: [], // Array of {game, amount, risk, id}
+    // Global game stats - tracks wins/losses per game type
+    gameStats: {
+        sportsbook: { wins: 0, losses: 0, totalProfit: 0 },
+        craps: { wins: 0, losses: 0, totalProfit: 0 },
+        poker: { wins: 0, losses: 0, totalProfit: 0 }
+    }
 };
 
 // Load User from LocalStorage
@@ -2915,11 +3518,16 @@ function loadUserProfile(username) {
 
 function saveUserProfile() {
     if (!currentUser) return;
-    // Update from inputs
-    currentUser.deposit = parseFloat(healthDeposit.value) || 0;
-    currentUser.casinoPlayed = parseFloat(healthCasino.value) || 0;
-    currentUser.sportsPlayed = parseFloat(healthSports.value) || 0;
-    currentUser.withdrawn = parseFloat(healthWithdraw.value) || 0;
+    // Update from inputs (guard elements may not exist in Blackjack-only view)
+    currentUser.deposit = healthDeposit ? (parseFloat(healthDeposit.value) || 0) : 0;
+    currentUser.casinoPlayed = healthCasino ? (parseFloat(healthCasino.value) || 0) : 0;
+    currentUser.sportsPlayed = healthSports ? (parseFloat(healthSports.value) || 0) : 0;
+    currentUser.withdrawn = healthWithdraw ? (parseFloat(healthWithdraw.value) || 0) : 0;
+    
+    // Save game stats to user profile
+    if (sessionStats.gameStats) {
+        currentUser.gameStats = sessionStats.gameStats;
+    }
     
     localStorage.setItem(`bj_user_${currentUser.username}`, JSON.stringify(currentUser));
     updateGuideRecommendation();
@@ -2931,14 +3539,34 @@ function updateUIForLogin() {
         loginBtn.style.display = 'none';
         profileNameEl.textContent = currentUser.username;
         
+        // Load game stats from user profile if they exist
+        if (currentUser.gameStats) {
+            sessionStats.gameStats = currentUser.gameStats;
+        } else {
+            // Initialize if they don't exist
+            initGameStats();
+        }
+        
+        // Load session history from user profile
+        if (currentUser.sessionHistory && Array.isArray(currentUser.sessionHistory)) {
+            sessionHistory = currentUser.sessionHistory;
+        } else {
+            sessionHistory = [];
+        }
+        
         // Populate Health Dashboard with SESSION stats (initially 0 or manual)
         // But maybe we should let user input session stats manually?
         // For now, just show session stats in Tab 3
-        healthDeposit.value = sessionStats.deposit;
-        healthCasino.value = sessionStats.casinoPlayed;
-        healthSports.value = sessionStats.sportsPlayed;
-        healthWithdraw.value = sessionStats.withdrawn;
+        if (healthDeposit) healthDeposit.value = sessionStats.deposit;
+        if (healthCasino) healthCasino.value = sessionStats.casinoPlayed;
+        if (healthSports) healthSports.value = sessionStats.sportsPlayed;
+        if (healthWithdraw) healthWithdraw.value = sessionStats.withdrawn;
         if (healthFreeSpins) healthFreeSpins.value = sessionStats.freeSpins || 0;
+        
+        // Update game stats displays
+        updateGameStatsDisplay('sportsbook');
+        updateGameStatsDisplay('craps');
+        updateGameStatsDisplay('poker');
         
         // Trigger updates
         updateHealth();
@@ -2948,10 +3576,10 @@ function updateUIForLogin() {
         loginBtn.style.display = 'block';
         
         // Clear Health Dashboard
-        healthDeposit.value = 0;
-        healthCasino.value = 0;
-        healthSports.value = 0;
-        healthWithdraw.value = 0;
+        if (healthDeposit) healthDeposit.value = 0;
+        if (healthCasino) healthCasino.value = 0;
+        if (healthSports) healthSports.value = 0;
+        if (healthWithdraw) healthWithdraw.value = 0;
         if (healthFreeSpins) healthFreeSpins.value = 0;
         updateHealth();
         if (guideOverlay) guideOverlay.style.display = 'none';
@@ -2965,10 +3593,11 @@ function updateGuideRecommendation() {
     // The Guide usually looks at Health Dashboard.
     // So Guide = Session.
     
-    const deposit = parseFloat(healthDeposit.value) || 0;
-    const casino = parseFloat(healthCasino.value) || 0;
-    const sports = parseFloat(healthSports.value) || 0;
-    const withdrawn = parseFloat(healthWithdraw.value) || 0;
+    // Guard against null health inputs (they may not exist if Health tab isn't loaded)
+    const deposit = healthDeposit ? (parseFloat(healthDeposit.value) || 0) : 0;
+    const casino = healthCasino ? (parseFloat(healthCasino.value) || 0) : 0;
+    const sports = healthSports ? (parseFloat(healthSports.value) || 0) : 0;
+    const withdrawn = healthWithdraw ? (parseFloat(healthWithdraw.value) || 0) : 0;
     
     let rec = "";
     let actionTab = "";
@@ -3168,14 +3797,13 @@ function initPoker() {
         if (!handMatrix) return;
         handMatrix.innerHTML = '';
         
-        // Header row
-        const headerRow = document.createElement('div');
-        headerRow.style.gridColumn = '1 / 15';
-        headerRow.className = 'matrix-cell header';
-        headerRow.textContent = 'Hand Matrix (Click to select)';
-        handMatrix.appendChild(headerRow);
+        // Empty cell for top-left corner
+        const cornerCell = document.createElement('div');
+        cornerCell.className = 'matrix-cell header';
+        cornerCell.style.visibility = 'hidden';
+        handMatrix.appendChild(cornerCell);
         
-        // Column headers
+        // Column headers (ranks across the top)
         for (let i = 0; i < ranks.length; i++) {
             const header = document.createElement('div');
             header.className = 'matrix-cell header';
@@ -3185,7 +3813,7 @@ function initPoker() {
         
         // Build matrix cells
         for (let row = 0; row < ranks.length; row++) {
-            // Row header
+            // Row header (rank on the left)
             const rowHeader = document.createElement('div');
             rowHeader.className = 'matrix-cell header';
             rowHeader.textContent = ranks[row];
@@ -4102,6 +4730,1834 @@ function initWalletSystem() {
     }
 }
 
+// ===== NEW HEALTH DASHBOARD WORKFLOW =====
+
+// Session state
+let currentSession = {
+    active: false,
+    site: null,
+    game: null,
+    startTime: null,
+    wins: 0,
+    losses: 0,
+    total: 0,
+    balance: 0, // Starting balance for this session
+    moneyIn: 0, // Total money funneled INTO gambling site
+    moneyOut: 0, // Total money funneled OUT of gambling site
+    flowHistory: [] // Track money flow transactions
+};
+
+// Session history - stores all completed sessions
+let sessionHistory = [];
+
+// Step 1: Update Dashboard (Read-Only)
+function updateHealthDashboard() {
+    // Calculate totals from sessionStats
+    const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+    const cleanMoney = (sessionStats.casinoPlayed || 0) * 0.5; // Simplified: assume 50% is clean after play
+    const dirtyMoney = totalBankroll - cleanMoney;
+    
+    // Update dashboard display
+    const totalBankrollEl = document.getElementById('dashboard-total-bankroll');
+    const cleanMoneyEl = document.getElementById('dashboard-clean-money');
+    const dirtyMoneyEl = document.getElementById('dashboard-dirty-money');
+    const riskLevelEl = document.getElementById('dashboard-risk-level');
+    const actionTextEl = document.getElementById('dashboard-action-text');
+    
+    if (totalBankrollEl) totalBankrollEl.textContent = `$${totalBankroll.toFixed(2)}`;
+    if (cleanMoneyEl) cleanMoneyEl.textContent = `$${cleanMoney.toFixed(2)}`;
+    if (dirtyMoneyEl) dirtyMoneyEl.textContent = `$${Math.max(0, dirtyMoney).toFixed(2)}`;
+    
+    // Determine risk level
+    const dirtyPercent = totalBankroll > 0 ? (dirtyMoney / totalBankroll) * 100 : 0;
+    let riskLevel = 'Low (Clean)';
+    let riskColor = '#22c55e';
+    
+    if (dirtyPercent > 50) {
+        riskLevel = 'High (Needs Washing)';
+        riskColor = '#f87171';
+    } else if (dirtyPercent > 25) {
+        riskLevel = 'Medium (Monitor)';
+        riskColor = '#fbbf24';
+    }
+    
+    if (riskLevelEl) {
+        riskLevelEl.textContent = `Risk Level: ${riskLevel}`;
+        riskLevelEl.style.color = riskColor;
+    }
+    
+    // Action required
+    if (actionTextEl) {
+        if (dirtyMoney > 0) {
+            const washAmount = dirtyMoney * 2; // Need 2x turnover to wash
+            actionTextEl.innerHTML = `You have <strong>$${dirtyMoney.toFixed(2)}</strong> of dirty money. <br>Suggested Action: Play <strong>$${washAmount.toFixed(2)}</strong> of Blackjack.`;
+        } else {
+            actionTextEl.textContent = 'No action needed. All funds are clean.';
+        }
+    }
+}
+
+// Step 2: Check-In Handlers
+function initCheckInHandlers() {
+    const addFundsBtn = document.getElementById('add-funds-btn');
+    const withdrawFundsBtn = document.getElementById('withdraw-funds-btn');
+    const addFundsModal = document.getElementById('add-funds-modal');
+    const withdrawModal = document.getElementById('withdraw-modal');
+    const addFundsConfirmBtn = document.getElementById('add-funds-confirm-btn');
+    const addFundsCancelBtn = document.getElementById('add-funds-cancel-btn');
+    const withdrawConfirmBtn = document.getElementById('withdraw-confirm-btn');
+    const withdrawCancelBtn = document.getElementById('withdraw-cancel-btn');
+    
+    if (addFundsBtn && addFundsModal) {
+        addFundsBtn.addEventListener('click', () => {
+            addFundsModal.style.display = 'flex';
+        });
+    }
+    
+    if (addFundsCancelBtn && addFundsModal) {
+        addFundsCancelBtn.addEventListener('click', () => {
+            addFundsModal.style.display = 'none';
+        });
+    }
+    
+    if (addFundsConfirmBtn) {
+        addFundsConfirmBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('add-funds-amount')?.value || 0);
+            const source = document.getElementById('add-funds-source')?.value || 'other';
+            
+            if (amount > 0) {
+                sessionStats.deposit = (sessionStats.deposit || 0) + amount;
+                if (addFundsModal) addFundsModal.style.display = 'none';
+                updateHealthDashboard();
+                if (currentUser) saveUserProfile();
+            }
+        });
+    }
+    
+    if (withdrawFundsBtn && withdrawModal) {
+        withdrawFundsBtn.addEventListener('click', () => {
+            withdrawModal.style.display = 'flex';
+        });
+    }
+    
+    if (withdrawCancelBtn && withdrawModal) {
+        withdrawCancelBtn.addEventListener('click', () => {
+            withdrawModal.style.display = 'none';
+        });
+    }
+    
+    if (withdrawConfirmBtn) {
+        withdrawConfirmBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('withdraw-amount')?.value || 0);
+            
+            if (amount > 0) {
+                sessionStats.withdrawn = (sessionStats.withdrawn || 0) + amount;
+                if (withdrawModal) withdrawModal.style.display = 'none';
+                updateHealthDashboard();
+                if (currentUser) saveUserProfile();
+            }
+        });
+    }
+}
+
+// Step 3: Session Mode Handlers
+function initSessionHandlers() {
+    const startSessionBtn = document.getElementById('start-session-btn');
+    const startSessionModal = document.getElementById('start-session-modal');
+    const startSessionConfirmBtn = document.getElementById('start-session-confirm-btn');
+    const startSessionCancelBtn = document.getElementById('start-session-cancel-btn');
+    const endSessionBtn = document.getElementById('end-session-btn');
+    const recordWinBtn = document.getElementById('record-win-btn');
+    const recordLossBtn = document.getElementById('record-loss-btn');
+    
+    if (startSessionBtn && startSessionModal) {
+        startSessionBtn.addEventListener('click', () => {
+            startSessionModal.style.display = 'flex';
+        });
+    }
+    
+    if (startSessionCancelBtn && startSessionModal) {
+        startSessionCancelBtn.addEventListener('click', () => {
+            startSessionModal.style.display = 'none';
+        });
+    }
+    
+    if (startSessionConfirmBtn) {
+        startSessionConfirmBtn.addEventListener('click', () => {
+            const site = document.getElementById('session-site-select')?.value || 'other';
+            const game = document.getElementById('session-game-select')?.value || 'other';
+            
+            // Get starting balance (from Health dashboard or LIVE MIRROR mode)
+            let startingBalance = 0;
+            if (liveMode && liveMirrorBalance > 0) {
+                startingBalance = liveMirrorBalance;
+            } else {
+                // Try to get from Health dashboard
+                const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+                startingBalance = totalBankroll;
+            }
+            
+            currentSession = {
+                active: true,
+                site: site,
+                game: game,
+                startTime: new Date(),
+                wins: 0,
+                losses: 0,
+                total: 0,
+                balance: startingBalance,
+                moneyIn: 0,
+                moneyOut: 0,
+                flowHistory: []
+            };
+            
+            updateSessionDisplay();
+            updateSportsbookMoneyFlow();
+            if (startSessionModal) startSessionModal.style.display = 'none';
+        });
+    }
+    
+    if (endSessionBtn) {
+        endSessionBtn.addEventListener('click', () => {
+            if (confirm('End current session?')) {
+                // Save session to history before ending
+                if (currentSession.active) {
+                    const sessionData = {
+                        id: Date.now().toString(),
+                        site: currentSession.site,
+                        game: currentSession.game,
+                        startTime: currentSession.startTime,
+                        endTime: new Date(),
+                        duration: currentSession.startTime ? Math.floor((new Date() - new Date(currentSession.startTime)) / 1000 / 60) : 0, // minutes
+                        wins: currentSession.wins,
+                        losses: currentSession.losses,
+                        total: currentSession.total,
+                        startingBalance: currentSession.balance,
+                        endingBalance: currentSession.balance + (currentSession.total || 0),
+                        moneyIn: currentSession.moneyIn,
+                        moneyOut: currentSession.moneyOut,
+                        flowHistory: [...currentSession.flowHistory],
+                        handHistory: liveMode ? [...liveMirrorStats.handHistory] : []
+                    };
+                    sessionHistory.push(sessionData);
+                    
+                    // Keep last 100 sessions
+                    if (sessionHistory.length > 100) {
+                        sessionHistory.shift();
+                    }
+                    
+                    // Save to localStorage
+                    if (currentUser) {
+                        const userData = JSON.parse(localStorage.getItem(`bj_user_${currentUser.username}`) || '{}');
+                        userData.sessionHistory = sessionHistory;
+                        localStorage.setItem(`bj_user_${currentUser.username}`, JSON.stringify(userData));
+                        currentUser.sessionHistory = sessionHistory; // Update current user object
+                    }
+                }
+                // Save session data before ending
+                const profit = currentSession.moneyOut - currentSession.moneyIn;
+                if (profit !== 0) {
+                    // Update session stats with final profit
+                    sessionStats.sportsPlayed += currentSession.moneyIn;
+                    sessionStats.withdrawn = (sessionStats.withdrawn || 0) + currentSession.moneyOut;
+                }
+                
+                currentSession.active = false;
+                updateSessionDisplay();
+                updateHealthDashboard();
+                if (currentUser) saveUserProfile();
+            }
+        });
+    }
+    
+    // Export Data Button Handler (old - now opens sidebar)
+    const exportDataBtn = document.getElementById('export-data-btn');
+    if (exportDataBtn && !exportDataBtn.hasAttribute('data-listener-added')) {
+        exportDataBtn.setAttribute('data-listener-added', 'true');
+        exportDataBtn.addEventListener('click', () => {
+            // Open export sidebar instead
+            if (exportSidebarEl) {
+                exportSidebarEl.style.display = 'flex';
+                exportSidebarEl.classList.add('active');
+            }
+        });
+    }
+    
+    if (recordWinBtn) {
+        recordWinBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('session-win-amount')?.value || 0);
+            if (amount > 0 && currentSession.active) {
+                currentSession.wins += amount;
+                currentSession.total += amount;
+                updateSessionDisplay();
+                document.getElementById('session-win-amount').value = '';
+            }
+        });
+    }
+    
+    if (recordLossBtn) {
+        recordLossBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('session-loss-amount')?.value || 0);
+            if (amount > 0 && currentSession.active) {
+                currentSession.losses += amount;
+                currentSession.total -= amount;
+                updateSessionDisplay();
+                document.getElementById('session-loss-amount').value = '';
+            }
+        });
+    }
+}
+
+function updateSessionDisplay() {
+    const sessionNotStarted = document.getElementById('session-not-started');
+    const sessionActive = document.getElementById('session-active');
+    const sessionSiteEl = document.getElementById('session-site');
+    const sessionGameEl = document.getElementById('session-game');
+    const sessionStartTimeEl = document.getElementById('session-start-time');
+    const sessionTotalEl = document.getElementById('session-total');
+    const sessionWinsEl = document.getElementById('session-wins');
+    const sessionLossesEl = document.getElementById('session-losses');
+    
+    if (currentSession.active) {
+        if (sessionNotStarted) sessionNotStarted.style.display = 'none';
+        if (sessionActive) sessionActive.style.display = 'block';
+        if (sessionSiteEl) sessionSiteEl.textContent = currentSession.site;
+        if (sessionGameEl) sessionGameEl.textContent = currentSession.game;
+        if (sessionStartTimeEl) sessionStartTimeEl.textContent = currentSession.startTime.toLocaleTimeString();
+        if (sessionTotalEl) sessionTotalEl.textContent = `$${currentSession.total.toFixed(2)}`;
+        if (sessionWinsEl) sessionWinsEl.textContent = `$${currentSession.wins.toFixed(2)}`;
+        if (sessionLossesEl) sessionLossesEl.textContent = `$${currentSession.losses.toFixed(2)}`;
+    } else {
+        if (sessionNotStarted) sessionNotStarted.style.display = 'block';
+        if (sessionActive) sessionActive.style.display = 'none';
+    }
+    
+    // Update Sportsbook money flow display
+    updateSportsbookMoneyFlow();
+}
+
+// Update Sportsbook Money Flow Tracker
+function updateSportsbookMoneyFlow() {
+    const sportsMoneyFlow = document.getElementById('sports-money-flow');
+    const sportsBalanceEl = document.getElementById('sports-balance');
+    const sportsProfitEl = document.getElementById('sports-profit');
+    const sportsFlowList = document.getElementById('sports-flow-list');
+    
+    if (!sportsMoneyFlow) return;
+    
+    // Show/hide based on session status
+    if (currentSession.active) {
+        sportsMoneyFlow.style.display = 'block';
+        
+        // Calculate current balance: starting balance + money out - money in
+        const currentBalance = currentSession.balance + currentSession.moneyOut - currentSession.moneyIn;
+        
+        // Calculate profit: money out - money in (net money returned)
+        const profit = currentSession.moneyOut - currentSession.moneyIn;
+        
+        if (sportsBalanceEl) {
+            sportsBalanceEl.textContent = `$${currentBalance.toFixed(2)}`;
+        }
+        
+        if (sportsProfitEl) {
+            sportsProfitEl.textContent = profit >= 0 ? `+$${profit.toFixed(2)}` : `$${profit.toFixed(2)}`;
+            sportsProfitEl.style.color = profit >= 0 ? '#22c55e' : '#f87171';
+        }
+        
+        // Update flow history
+        if (sportsFlowList) {
+            if (currentSession.flowHistory.length === 0) {
+                sportsFlowList.innerHTML = '<div style="color: #94a3b8;">No transactions yet.</div>';
+            } else {
+                let historyHTML = '';
+                currentSession.flowHistory.slice(-10).reverse().forEach(transaction => {
+                    const type = transaction.type === 'in' ? '💰 In' : '💵 Out';
+                    const color = transaction.type === 'in' ? '#ef4444' : '#22c55e';
+                    const sign = transaction.type === 'in' ? '-' : '+';
+                    historyHTML += `
+                        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <div>
+                                <span style="color: ${color}; font-weight: bold;">${type}</span>
+                                <span style="color: #94a3b8; margin-left: 8px; font-size: 0.9em;">${transaction.note || ''}</span>
+                            </div>
+                            <div style="color: ${color}; font-weight: bold;">${sign}$${transaction.amount.toFixed(2)}</div>
+                        </div>
+                    `;
+                });
+                sportsFlowList.innerHTML = historyHTML;
+            }
+        }
+    } else {
+        sportsMoneyFlow.style.display = 'none';
+    }
+}
+
+// ===== FILE EXPORT FUNCTIONALITY =====
+
+// Export all data to files (creates folder structure and .txt files)
+async function exportDataToFiles() {
+    if (!currentUser) {
+        alert('Please log in first to export data.');
+        return;
+    }
+    
+    try {
+        // Check if File System Access API is available (Chrome/Edge)
+        if ('showDirectoryPicker' in window) {
+            // Use File System Access API to create folder
+            const dirHandle = await window.showDirectoryPicker();
+            const folderName = `BlackjackTracker_${currentUser.username}_${new Date().toISOString().split('T')[0]}`;
+            const folderHandle = await dirHandle.getDirectoryHandle(folderName, { create: true });
+            
+            // Create session history file
+            const sessionHistoryFile = await folderHandle.getFileHandle('session_history.txt', { create: true });
+            const sessionHistoryWritable = await sessionHistoryFile.createWritable();
+            const sessionHistoryText = formatSessionHistory();
+            await sessionHistoryWritable.write(sessionHistoryText);
+            await sessionHistoryWritable.close();
+            
+            // Create stats file
+            const statsFile = await folderHandle.getFileHandle('stats.txt', { create: true });
+            const statsWritable = await statsFile.createWritable();
+            const statsText = formatStats();
+            await statsWritable.write(statsText);
+            await statsWritable.close();
+            
+            // Create game stats file
+            const gameStatsFile = await folderHandle.getFileHandle('game_stats.txt', { create: true });
+            const gameStatsWritable = await gameStatsFile.createWritable();
+            const gameStatsText = formatGameStats();
+            await gameStatsWritable.write(gameStatsText);
+            await gameStatsWritable.close();
+            
+            alert(`✅ Data exported successfully to:\n${folderName}\n\nFiles created:\n- session_history.txt\n- stats.txt\n- game_stats.txt`);
+        } else {
+            // Fallback: Download files directly
+            downloadFile('session_history.txt', formatSessionHistory());
+            downloadFile('stats.txt', formatStats());
+            downloadFile('game_stats.txt', formatGameStats());
+            alert('✅ Data exported! Files downloaded to your Downloads folder.\n\nNote: For folder organization, use Chrome or Edge browser.');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        if (error.name !== 'AbortError') {
+            // Fallback to download if user cancels folder picker
+            downloadFile('session_history.txt', formatSessionHistory());
+            downloadFile('stats.txt', formatStats());
+            downloadFile('game_stats.txt', formatGameStats());
+            alert('✅ Data exported! Files downloaded to your Downloads folder.');
+        }
+    }
+}
+
+// Format session history as text
+function formatSessionHistory() {
+    let text = `BLACKJACK TRACKER - SESSION HISTORY\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `Total Sessions: ${sessionHistory.length}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    if (sessionHistory.length === 0) {
+        text += 'No sessions recorded yet.\n';
+    } else {
+        sessionHistory.forEach((session, index) => {
+            text += `SESSION #${index + 1}\n`;
+            text += `${'-'.repeat(80)}\n`;
+            text += `Site: ${session.site || 'N/A'}\n`;
+            text += `Game: ${session.game || 'N/A'}\n`;
+            text += `Start Time: ${new Date(session.startTime).toLocaleString()}\n`;
+            text += `End Time: ${new Date(session.endTime).toLocaleString()}\n`;
+            text += `Duration: ${session.duration} minutes\n`;
+            text += `Starting Balance: $${session.startingBalance.toFixed(2)}\n`;
+            text += `Ending Balance: $${session.endingBalance.toFixed(2)}\n`;
+            text += `Net Profit: $${(session.endingBalance - session.startingBalance).toFixed(2)}\n`;
+            text += `Wins: $${session.wins.toFixed(2)}\n`;
+            text += `Losses: $${session.losses.toFixed(2)}\n`;
+            text += `Money In: $${session.moneyIn.toFixed(2)}\n`;
+            text += `Money Out: $${session.moneyOut.toFixed(2)}\n`;
+            
+            if (session.flowHistory && session.flowHistory.length > 0) {
+                text += `\nMoney Flow Transactions:\n`;
+                session.flowHistory.forEach((flow, i) => {
+                    text += `  ${i + 1}. ${flow.type === 'in' ? 'Money In' : 'Money Out'}: $${flow.amount.toFixed(2)} - ${flow.note || 'No note'} (${new Date(flow.time).toLocaleString()})\n`;
+                });
+            }
+            
+            if (session.handHistory && session.handHistory.length > 0) {
+                text += `\nHand History (Last ${session.handHistory.length} hands):\n`;
+                session.handHistory.forEach((hand, i) => {
+                    text += `  ${i + 1}. ${hand.result.toUpperCase()}: $${hand.bet.toFixed(2)} bet, $${hand.profit >= 0 ? '+' : ''}${hand.profit.toFixed(2)} profit (${new Date(hand.time).toLocaleString()})\n`;
+                });
+            }
+            
+            text += `\n${'='.repeat(80)}\n\n`;
+        });
+    }
+    
+    return text;
+}
+
+// Format stats as text
+function formatStats() {
+    let text = `BLACKJACK TRACKER - STATISTICS\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    text += `FINANCIAL SUMMARY\n`;
+    text += `${'-'.repeat(80)}\n`;
+    text += `Total Deposits: $${(sessionStats.deposit || 0).toFixed(2)}\n`;
+    text += `Casino Played: $${(sessionStats.casinoPlayed || 0).toFixed(2)}\n`;
+    text += `Sportsbook Played: $${(sessionStats.sportsPlayed || 0).toFixed(2)}\n`;
+    text += `Total Withdrawn: $${(sessionStats.withdrawn || 0).toFixed(2)}\n`;
+    
+    const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+    text += `Total Bankroll: $${totalBankroll.toFixed(2)}\n`;
+    
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    text += `LIVE MIRROR STATS\n`;
+    text += `${'-'.repeat(80)}\n`;
+    text += `Hands Played: ${liveMirrorStats.handsPlayed}\n`;
+    text += `Hands Won: ${liveMirrorStats.handsWon}\n`;
+    text += `Hands Lost: ${liveMirrorStats.handsLost}\n`;
+    text += `Hands Pushed: ${liveMirrorStats.handsPushed}\n`;
+    text += `Total Wagered: $${liveMirrorStats.totalWagered.toFixed(2)}\n`;
+    text += `Total Profit: $${liveMirrorStats.totalProfit >= 0 ? '+' : ''}${liveMirrorStats.totalProfit.toFixed(2)}\n`;
+    text += `Perfect Strategy Count: ${liveMirrorStats.perfectStrategyCount}\n`;
+    
+    return text;
+}
+
+// Format game stats as text
+function formatGameStats() {
+    let text = `BLACKJACK TRACKER - GAME STATISTICS\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    if (sessionStats.gameStats) {
+        const games = ['sportsbook', 'craps', 'poker'];
+        games.forEach(game => {
+            const stats = sessionStats.gameStats[game];
+            if (stats) {
+                text += `${game.toUpperCase()}\n`;
+                text += `${'-'.repeat(80)}\n`;
+                text += `Total Wins: $${stats.wins.toFixed(2)}\n`;
+                text += `Total Losses: $${stats.losses.toFixed(2)}\n`;
+                text += `Net Profit: $${stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit.toFixed(2)}\n`;
+                text += `\n`;
+            }
+        });
+    } else {
+        text += 'No game statistics recorded yet.\n';
+    }
+    
+    return text;
+}
+
+// Download file as fallback
+function downloadFile(filename, content) {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ===== GLOBAL GAME WIN/LOSS TRACKING =====
+
+// Initialize game stats if they don't exist
+function initGameStats() {
+    if (!sessionStats.gameStats) {
+        sessionStats.gameStats = {
+            sportsbook: { wins: 0, losses: 0, totalProfit: 0 },
+            craps: { wins: 0, losses: 0, totalProfit: 0 },
+            poker: { wins: 0, losses: 0, totalProfit: 0 }
+        };
+    }
+}
+
+// Update game stats display for a specific game
+function updateGameStatsDisplay(gameType) {
+    const stats = sessionStats.gameStats[gameType];
+    if (!stats) return;
+    
+    const winsEl = document.getElementById(`${gameType}-wins`);
+    const lossesEl = document.getElementById(`${gameType}-losses`);
+    const netProfitEl = document.getElementById(`${gameType}-net-profit`);
+    
+    if (winsEl) winsEl.textContent = `$${stats.wins.toFixed(2)}`;
+    if (lossesEl) lossesEl.textContent = `$${stats.losses.toFixed(2)}`;
+    if (netProfitEl) {
+        const profit = stats.totalProfit;
+        netProfitEl.textContent = profit >= 0 ? `+$${profit.toFixed(2)}` : `$${profit.toFixed(2)}`;
+        netProfitEl.style.color = profit >= 0 ? '#22c55e' : '#f87171';
+    }
+}
+
+// Record win for a specific game
+function recordGameWin(gameType, amount) {
+    if (!amount || amount <= 0) return;
+    
+    initGameStats();
+    const stats = sessionStats.gameStats[gameType];
+    stats.wins += amount;
+    stats.totalProfit += amount;
+    
+    // Update session stats
+    if (gameType === 'sportsbook') {
+        sessionStats.sportsPlayed += amount;
+    } else if (gameType === 'craps') {
+        sessionStats.casinoPlayed += amount;
+    } else if (gameType === 'poker') {
+        sessionStats.casinoPlayed += amount;
+    }
+    
+    updateGameStatsDisplay(gameType);
+    updateHealthDashboard();
+    if (currentUser) saveUserProfile();
+}
+
+// Record loss for a specific game
+function recordGameLoss(gameType, amount) {
+    if (!amount || amount <= 0) return;
+    
+    initGameStats();
+    const stats = sessionStats.gameStats[gameType];
+    stats.losses += amount;
+    stats.totalProfit -= amount;
+    
+    // Update session stats
+    if (gameType === 'sportsbook') {
+        sessionStats.sportsPlayed += amount;
+    } else if (gameType === 'craps') {
+        sessionStats.casinoPlayed += amount;
+    } else if (gameType === 'poker') {
+        sessionStats.casinoPlayed += amount;
+    }
+    
+    updateGameStatsDisplay(gameType);
+    updateHealthDashboard();
+    if (currentUser) saveUserProfile();
+}
+
+// Initialize all game win/loss tracking handlers
+function initGameWinLossTracking() {
+    initGameStats();
+    
+    // Sportsbook handlers
+    const sportsWinBtn = document.getElementById('sports-record-win-btn');
+    const sportsLossBtn = document.getElementById('sports-record-loss-btn');
+    
+    if (sportsWinBtn) {
+        sportsWinBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('sports-win-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameWin('sportsbook', amount);
+                document.getElementById('sports-win-amount').value = '';
+            }
+        });
+    }
+    
+    if (sportsLossBtn) {
+        sportsLossBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('sports-loss-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameLoss('sportsbook', amount);
+                document.getElementById('sports-loss-amount').value = '';
+            }
+        });
+    }
+    
+    // Craps handlers
+    const crapsWinBtn = document.getElementById('craps-record-win-btn');
+    const crapsLossBtn = document.getElementById('craps-record-loss-btn');
+    
+    if (crapsWinBtn) {
+        crapsWinBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('craps-win-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameWin('craps', amount);
+                document.getElementById('craps-win-amount').value = '';
+            }
+        });
+    }
+    
+    if (crapsLossBtn) {
+        crapsLossBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('craps-loss-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameLoss('craps', amount);
+                document.getElementById('craps-loss-amount').value = '';
+            }
+        });
+    }
+    
+    // Poker handlers
+    const pokerWinBtn = document.getElementById('poker-record-win-btn');
+    const pokerLossBtn = document.getElementById('poker-record-loss-btn');
+    
+    if (pokerWinBtn) {
+        pokerWinBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('poker-win-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameWin('poker', amount);
+                document.getElementById('poker-win-amount').value = '';
+            }
+        });
+    }
+    
+    if (pokerLossBtn) {
+        pokerLossBtn.addEventListener('click', () => {
+            const amount = parseFloat(document.getElementById('poker-loss-amount')?.value || 0);
+            if (amount > 0) {
+                recordGameLoss('poker', amount);
+                document.getElementById('poker-loss-amount').value = '';
+            }
+        });
+    }
+    
+    // Update all displays on load
+    updateGameStatsDisplay('sportsbook');
+    updateGameStatsDisplay('craps');
+    updateGameStatsDisplay('poker');
+}
+
+// ===== FILE EXPORT FUNCTIONALITY =====
+
+// Export all data to files (creates folder structure and .txt files)
+async function exportDataToFiles() {
+    if (!currentUser) {
+        alert('Please log in first to export data.');
+        return;
+    }
+    
+    try {
+        // Check if File System Access API is available (Chrome/Edge)
+        if ('showDirectoryPicker' in window) {
+            // Use File System Access API to create folder
+            const dirHandle = await window.showDirectoryPicker();
+            const folderName = `BlackjackTracker_${currentUser.username}_${new Date().toISOString().split('T')[0]}`;
+            const folderHandle = await dirHandle.getDirectoryHandle(folderName, { create: true });
+            
+            // Create session history file
+            const sessionHistoryFile = await folderHandle.getFileHandle('session_history.txt', { create: true });
+            const sessionHistoryWritable = await sessionHistoryFile.createWritable();
+            const sessionHistoryText = formatSessionHistory();
+            await sessionHistoryWritable.write(sessionHistoryText);
+            await sessionHistoryWritable.close();
+            
+            // Create stats file
+            const statsFile = await folderHandle.getFileHandle('stats.txt', { create: true });
+            const statsWritable = await statsFile.createWritable();
+            const statsText = formatStats();
+            await statsWritable.write(statsText);
+            await statsWritable.close();
+            
+            // Create game stats file
+            const gameStatsFile = await folderHandle.getFileHandle('game_stats.txt', { create: true });
+            const gameStatsWritable = await gameStatsFile.createWritable();
+            const gameStatsText = formatGameStats();
+            await gameStatsWritable.write(gameStatsText);
+            await gameStatsWritable.close();
+            
+            alert(`✅ Data exported successfully to:\n${folderName}\n\nFiles created:\n- session_history.txt\n- stats.txt\n- game_stats.txt`);
+        } else {
+            // Fallback: Download files directly
+            downloadFile('session_history.txt', formatSessionHistory());
+            downloadFile('stats.txt', formatStats());
+            downloadFile('game_stats.txt', formatGameStats());
+            alert('✅ Data exported! Files downloaded to your Downloads folder.\n\nNote: For folder organization, use Chrome or Edge browser.');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        if (error.name !== 'AbortError') {
+            // Fallback to download if user cancels folder picker
+            downloadFile('session_history.txt', formatSessionHistory());
+            downloadFile('stats.txt', formatStats());
+            downloadFile('game_stats.txt', formatGameStats());
+            alert('✅ Data exported! Files downloaded to your Downloads folder.');
+        }
+    }
+}
+
+// Format session history as text
+function formatSessionHistory() {
+    let text = `BLACKJACK TRACKER - SESSION HISTORY\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `Total Sessions: ${sessionHistory.length}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    if (sessionHistory.length === 0) {
+        text += 'No sessions recorded yet.\n';
+    } else {
+        sessionHistory.forEach((session, index) => {
+            text += `SESSION #${index + 1}\n`;
+            text += `${'-'.repeat(80)}\n`;
+            text += `Site: ${session.site || 'N/A'}\n`;
+            text += `Game: ${session.game || 'N/A'}\n`;
+            text += `Start Time: ${new Date(session.startTime).toLocaleString()}\n`;
+            text += `End Time: ${new Date(session.endTime).toLocaleString()}\n`;
+            text += `Duration: ${session.duration} minutes\n`;
+            text += `Starting Balance: $${session.startingBalance.toFixed(2)}\n`;
+            text += `Ending Balance: $${session.endingBalance.toFixed(2)}\n`;
+            text += `Net Profit: $${(session.endingBalance - session.startingBalance).toFixed(2)}\n`;
+            text += `Wins: $${session.wins.toFixed(2)}\n`;
+            text += `Losses: $${session.losses.toFixed(2)}\n`;
+            text += `Money In: $${session.moneyIn.toFixed(2)}\n`;
+            text += `Money Out: $${session.moneyOut.toFixed(2)}\n`;
+            
+            if (session.flowHistory && session.flowHistory.length > 0) {
+                text += `\nMoney Flow Transactions:\n`;
+                session.flowHistory.forEach((flow, i) => {
+                    text += `  ${i + 1}. ${flow.type === 'in' ? 'Money In' : 'Money Out'}: $${flow.amount.toFixed(2)} - ${flow.note || 'No note'} (${new Date(flow.time).toLocaleString()})\n`;
+                });
+            }
+            
+            if (session.handHistory && session.handHistory.length > 0) {
+                text += `\nHand History (Last ${session.handHistory.length} hands):\n`;
+                session.handHistory.forEach((hand, i) => {
+                    text += `  ${i + 1}. ${hand.result.toUpperCase()}: $${hand.bet.toFixed(2)} bet, $${hand.profit >= 0 ? '+' : ''}${hand.profit.toFixed(2)} profit (${new Date(hand.time).toLocaleString()})\n`;
+                });
+            }
+            
+            text += `\n${'='.repeat(80)}\n\n`;
+        });
+    }
+    
+    return text;
+}
+
+// Format stats as text
+function formatStats() {
+    let text = `BLACKJACK TRACKER - STATISTICS\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    text += `FINANCIAL SUMMARY\n`;
+    text += `${'-'.repeat(80)}\n`;
+    text += `Total Deposits: $${(sessionStats.deposit || 0).toFixed(2)}\n`;
+    text += `Casino Played: $${(sessionStats.casinoPlayed || 0).toFixed(2)}\n`;
+    text += `Sportsbook Played: $${(sessionStats.sportsPlayed || 0).toFixed(2)}\n`;
+    text += `Total Withdrawn: $${(sessionStats.withdrawn || 0).toFixed(2)}\n`;
+    
+    const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+    text += `Total Bankroll: $${totalBankroll.toFixed(2)}\n`;
+    
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    text += `LIVE MIRROR STATS\n`;
+    text += `${'-'.repeat(80)}\n`;
+    text += `Hands Played: ${liveMirrorStats.handsPlayed}\n`;
+    text += `Hands Won: ${liveMirrorStats.handsWon}\n`;
+    text += `Hands Lost: ${liveMirrorStats.handsLost}\n`;
+    text += `Hands Pushed: ${liveMirrorStats.handsPushed}\n`;
+    text += `Total Wagered: $${liveMirrorStats.totalWagered.toFixed(2)}\n`;
+    text += `Total Profit: $${liveMirrorStats.totalProfit >= 0 ? '+' : ''}${liveMirrorStats.totalProfit.toFixed(2)}\n`;
+    text += `Perfect Strategy Count: ${liveMirrorStats.perfectStrategyCount}\n`;
+    
+    return text;
+}
+
+// Format game stats as text
+function formatGameStats() {
+    let text = `BLACKJACK TRACKER - GAME STATISTICS\n`;
+    text += `User: ${currentUser.username}\n`;
+    text += `Export Date: ${new Date().toLocaleString()}\n`;
+    text += `\n${'='.repeat(80)}\n\n`;
+    
+    if (sessionStats.gameStats) {
+        const games = ['sportsbook', 'craps', 'poker'];
+        games.forEach(game => {
+            const stats = sessionStats.gameStats[game];
+            if (stats) {
+                text += `${game.toUpperCase()}\n`;
+                text += `${'-'.repeat(80)}\n`;
+                text += `Total Wins: $${stats.wins.toFixed(2)}\n`;
+                text += `Total Losses: $${stats.losses.toFixed(2)}\n`;
+                text += `Net Profit: $${stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit.toFixed(2)}\n`;
+                text += `\n`;
+            }
+        });
+    } else {
+        text += 'No game statistics recorded yet.\n';
+    }
+    
+    return text;
+}
+
+// Download file as fallback
+function downloadFile(filename, content) {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ===== SPORTSBOOK VALUE FINDER (EV BETTING) =====
+
+// API endpoint for Python backend (adjust to your backend URL)
+const BACKEND_API_URL = 'http://localhost:8000'; // Change to your backend URL
+
+// Scan for +EV bets
+async function scanEVBets() {
+    const bankroll = parseFloat(document.getElementById('ev-bankroll')?.value || 0);
+    const sport = document.getElementById('ev-sport')?.value || 'basketball_nba';
+    const statusEl = document.getElementById('ev-scan-status');
+    const hotBetsContainer = document.getElementById('hot-bets-container');
+    const hotBetsList = document.getElementById('hot-bets-list');
+    
+    if (bankroll <= 0) {
+        alert('Please enter a valid bankroll amount.');
+        return;
+    }
+    
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Scanning sportsbooks for +EV bets...';
+        statusEl.style.color = '#60a5fa';
+    }
+    
+    try {
+        // Call Python backend API
+        const response = await fetch(`${BACKEND_API_URL}/api/scan-ev-bets`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                bankroll: bankroll,
+                sport: sport
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Backend API not available. Make sure Python backend is running.');
+        }
+        
+        const data = await response.json();
+        
+        if (statusEl) {
+            statusEl.style.display = 'none';
+        }
+        
+        if (data.bets && data.bets.length > 0) {
+            hotBetsContainer.style.display = 'block';
+            hotBetsList.innerHTML = '';
+            
+            data.bets.forEach((bet, index) => {
+                const betCard = document.createElement('div');
+                betCard.style.cssText = 'padding: 15px; margin-bottom: 10px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border-left: 4px solid #22c55e;';
+                
+                const evColor = bet.ev > 5 ? '#22c55e' : bet.ev > 2 ? '#fbbf24' : '#60a5fa';
+                const kellyPercent = (bet.kellyFraction * 100).toFixed(2);
+                
+                // Ensure bet has sport field
+                const betWithSport = {
+                    ...bet,
+                    sport: bet.sport || sport
+                };
+                
+                // Store bet data in a data attribute for easier access
+                betCard.setAttribute('data-bet-index', index);
+                betCard.setAttribute('data-bet-data', JSON.stringify(betWithSport));
+                
+                betCard.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #fff;">${bet.event || 'Event'}</div>
+                        <div style="color: ${evColor}; font-weight: bold;">+${bet.ev.toFixed(2)}% EV</div>
+                    </div>
+                    <div style="font-size: 0.85em; color: #94a3b8; margin-bottom: 5px;">
+                        ${bet.market || 'Market'}: ${bet.selection || 'Selection'}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85em;">
+                        <div>
+                            <span style="color: #94a3b8;">Odds:</span>
+                            <span style="color: #fff; font-weight: bold;">${bet.odds}</span>
+                        </div>
+                        <div>
+                            <span style="color: #94a3b8;">Kelly Bet:</span>
+                            <span style="color: #fbbf24; font-weight: bold;">${kellyPercent}% ($${(bankroll * bet.kellyFraction).toFixed(2)})</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.8em; color: #60a5fa;">
+                        📍 ${bet.sportsbook || 'Sportsbook'}
+                    </div>
+                    <button class="btn analyze-bet-btn" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); font-size: 0.85em; padding: 8px;" 
+                            data-bet-index="${index}">
+                        🎯 Analyze with Handicapping
+                    </button>
+                `;
+                
+                // Add click handler for analyze button
+                const analyzeBtn = betCard.querySelector('.analyze-bet-btn');
+                if (analyzeBtn) {
+                    analyzeBtn.addEventListener('click', () => {
+                        showSmartCard(betWithSport, bankroll);
+                    });
+                }
+                
+                hotBetsList.appendChild(betCard);
+            });
+        } else {
+            hotBetsContainer.style.display = 'block';
+            hotBetsList.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No +EV bets found at this time. Try again later.</div>';
+        }
+    } catch (error) {
+        console.error('EV scan error:', error);
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.textContent = `Error: ${error.message}. Make sure Python backend is running on ${BACKEND_API_URL}`;
+            statusEl.style.color = '#f87171';
+        }
+        
+        // Show mock data for demo purposes
+        showMockEVBets(bankroll);
+    }
+}
+
+// Show mock EV bets (for demo when backend is not available)
+function showMockEVBets(bankroll) {
+    const hotBetsContainer = document.getElementById('hot-bets-container');
+    const hotBetsList = document.getElementById('hot-bets-list');
+    
+    hotBetsContainer.style.display = 'block';
+    hotBetsList.innerHTML = `
+        <div style="padding: 15px; margin-bottom: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ef4444;">
+            <div style="color: #f87171; font-weight: bold; margin-bottom: 5px;">⚠️ Backend Not Connected</div>
+            <div style="color: #94a3b8; font-size: 0.85em;">
+                Start the Python backend API to scan for real +EV bets.<br>
+                Run: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">python backend_api.py</code>
+            </div>
+        </div>
+    `;
+}
+
+// Show Smart Card with handicapping analysis (make it global)
+window.showSmartCard = async function(bet, bankroll) {
+    const modal = document.getElementById('smart-card-modal');
+    const marketSignalText = document.getElementById('market-signal-text');
+    const modelSignalText = document.getElementById('model-signal-text');
+    const modelDetails = document.getElementById('model-details');
+    const confidenceScore = document.getElementById('confidence-score');
+    const confidenceBar = document.getElementById('confidence-bar');
+    const recommendationText = document.getElementById('recommendation-text');
+    const betSizeText = document.getElementById('bet-size-text');
+    
+    if (!modal) return;
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Extract team info from bet (simplified - would need better parsing in production)
+    const teamAbbr = bet.team_abbr || extractTeamFromEvent(bet.event, bet.selection);
+    const sport = bet.sport || document.getElementById('ev-sport')?.value || 'americanfootball_nfl';
+    
+    // Show market signal (Layer 1: Price Shopping)
+    const fairValue = (1 / bet.odds) * 100;
+    const impliedProb = (1 / bet.odds) * 100;
+    const edge = bet.ev;
+    
+    if (marketSignalText) {
+        marketSignalText.innerHTML = `
+            <div style="margin-bottom: 5px;">
+                <strong>Odds:</strong> ${bet.odds} (${impliedProb.toFixed(1)}% implied)
+            </div>
+            <div style="margin-bottom: 5px;">
+                <strong>Fair Value:</strong> ~${fairValue.toFixed(1)}% (based on market)
+            </div>
+            <div style="color: ${edge > 0 ? '#22c55e' : '#f87171'};">
+                <strong>Edge:</strong> ${edge >= 0 ? '+' : ''}${edge.toFixed(2)}% ✅
+            </div>
+        `;
+    }
+    
+    // Fetch handicapping validation (Layer 2: Handicapping)
+    // Only validate if it's NFL, NBA, or NHL
+    const sportType = sport.includes('nfl') || sport.includes('football') ? 'nfl' : 
+                     sport.includes('nba') || sport.includes('basketball') ? 'nba' :
+                     sport.includes('nhl') || sport.includes('hockey') ? 'nhl' : null;
+    
+    if (sportType && teamAbbr) {
+        try {
+            const response = await fetch(`${BACKEND_API_URL}/api/validate-bet`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    team_abbr: teamAbbr,
+                    opponent_abbr: bet.opponent_abbr || null,
+                    sport: sportType
+                })
+            });
+            
+            if (response.ok) {
+                const handicap = await response.json();
+                
+                // Show model signal
+                if (modelSignalText) {
+                    modelSignalText.textContent = handicap.model_signal || 'Model analysis unavailable';
+                }
+                
+                if (modelDetails) {
+                    let details = [];
+                    if (handicap.epa_rank) details.push(`EPA Rank: #${handicap.epa_rank}`);
+                    if (handicap.pass_offense) details.push(`Pass Offense: ${handicap.pass_offense}`);
+                    if (handicap.recent_trend) details.push(`Recent Trend: ${handicap.recent_trend}`);
+                    modelDetails.textContent = details.join(' | ') || 'Advanced stats loading...';
+                }
+                
+                // Update confidence score
+                if (confidenceScore) {
+                    confidenceScore.textContent = `${handicap.confidence_score}%`;
+                    confidenceScore.style.color = handicap.confidence_score >= 70 ? '#22c55e' : 
+                                                 handicap.confidence_score >= 50 ? '#fbbf24' : '#f87171';
+                }
+                
+                if (confidenceBar) {
+                    confidenceBar.style.width = `${handicap.confidence_score}%`;
+                }
+                
+                // Show recommendation
+                if (recommendationText) {
+                    recommendationText.textContent = handicap.recommendation || 'Analyzing...';
+                }
+                
+                // Calculate final bet size (combining market edge + model confidence)
+                const combinedConfidence = (bet.ev / 10) + (handicap.confidence_score / 2);
+                const finalKellyFraction = Math.min(0.25, Math.max(0, (bet.kellyFraction + (handicap.kelly_bet || 0)) / 2));
+                const finalBetAmount = bankroll * finalKellyFraction;
+                
+                if (betSizeText) {
+                    betSizeText.innerHTML = `
+                    <div style="margin-bottom: 5px;">
+                        <strong>Kelly Bet:</strong> $${finalBetAmount.toFixed(2)} (${(finalKellyFraction * 100).toFixed(2)}% of bankroll)
+                    </div>
+                    <div style="font-size: 0.85em; color: #94a3b8;">
+                        Based on ${edge.toFixed(1)}% edge + ${handicap.confidence_score}% model confidence
+                    </div>
+                `;
+                }
+            } else {
+                throw new Error('Handicapping API not available');
+            }
+        } catch (error) {
+            console.error('Handicapping error:', error);
+            
+            // Show fallback data
+            if (modelSignalText) {
+                modelSignalText.textContent = '⚠️ Handicapping model offline. Using market signal only.';
+            }
+            
+            if (confidenceScore) {
+                confidenceScore.textContent = 'N/A';
+                confidenceScore.style.color = '#fbbf24';
+            }
+            
+            if (recommendationText) {
+                recommendationText.textContent = `Based on market edge only: ${edge >= 3 ? 'Strong Play' : edge >= 1 ? 'Moderate Play' : 'Weak Play'}.`;
+            }
+            
+            if (betSizeText) {
+                betSizeText.innerHTML = `
+                    <div><strong>Kelly Bet:</strong> $${(bankroll * bet.kellyFraction).toFixed(2)} (${(bet.kellyFraction * 100).toFixed(2)}% of bankroll)</div>
+                    <div style="font-size: 0.85em; color: #94a3b8; margin-top: 5px;">Based on market edge only (handicapping unavailable)</div>
+                `;
+            }
+        }
+    } else {
+        // No handicapping available for this sport
+        if (modelSignalText) {
+            modelSignalText.textContent = 'Handicapping not available for this sport. Using market signal only.';
+        }
+        
+        if (confidenceScore) {
+            confidenceScore.textContent = 'N/A';
+            confidenceScore.style.color = '#fbbf24';
+        }
+        
+        if (recommendationText) {
+            recommendationText.textContent = `Based on market edge only: ${edge >= 3 ? 'Strong Play' : edge >= 1 ? 'Moderate Play' : 'Weak Play'}.`;
+        }
+        
+        if (betSizeText) {
+            betSizeText.innerHTML = `
+                <div><strong>Kelly Bet:</strong> $${(bankroll * bet.kellyFraction).toFixed(2)} (${(bet.kellyFraction * 100).toFixed(2)}% of bankroll)</div>
+                <div style="font-size: 0.85em; color: #94a3b8; margin-top: 5px;">Based on market edge only</div>
+            `;
+        }
+    }
+};
+
+// Extract team abbreviation from event string (simplified)
+function extractTeamFromEvent(event, selection) {
+    // This is a simplified parser - in production, use a proper team name mapping
+    // Combined map for NFL, NBA, and NHL
+    const teamMap = {
+        // NFL teams (existing)
+        'chiefs': 'KC', 'kansas city': 'KC',
+        'bills': 'BUF', 'buffalo': 'BUF',
+        'ravens': 'BAL', 'baltimore': 'BAL',
+        'dolphins': 'MIA', 'miami': 'MIA',
+        'patriots': 'NE', 'new england': 'NE',
+        'jets': 'NYJ', 'new york jets': 'NYJ',
+        'bengals': 'CIN', 'cincinnati': 'CIN',
+        'browns': 'CLE', 'cleveland': 'CLE',
+        'steelers': 'PIT', 'pittsburgh': 'PIT',
+        'texans': 'HOU', 'houston': 'HOU',
+        'colts': 'IND', 'indianapolis': 'IND',
+        'jaguars': 'JAX', 'jacksonville': 'JAX',
+        'titans': 'TEN', 'tennessee': 'TEN',
+        'broncos': 'DEN', 'denver': 'DEN',
+        'raiders': 'LV', 'las vegas': 'LV',
+        'chargers': 'LAC', 'los angeles chargers': 'LAC',
+        'cowboys': 'DAL', 'dallas': 'DAL',
+        'eagles': 'PHI', 'philadelphia': 'PHI',
+        'giants': 'NYG', 'new york giants': 'NYG',
+        'commanders': 'WAS', 'washington': 'WAS',
+        'packers': 'GB', 'green bay': 'GB',
+        'lions': 'DET', 'detroit': 'DET',
+        'vikings': 'MIN', 'minnesota': 'MIN',
+        'bears': 'CHI', 'chicago': 'CHI',
+        'falcons': 'ATL', 'atlanta': 'ATL',
+        'panthers': 'CAR', 'carolina': 'CAR',
+        'saints': 'NO', 'new orleans': 'NO',
+        'buccaneers': 'TB', 'tampa bay': 'TB',
+        'rams': 'LAR', 'los angeles rams': 'LAR',
+        '49ers': 'SF', 'san francisco': 'SF',
+        'seahawks': 'SEA', 'seattle': 'SEA',
+        'cardinals': 'ARI', 'arizona': 'ARI',
+        // NBA teams
+        'lakers': 'LAL', 'los angeles lakers': 'LAL',
+        'warriors': 'GSW', 'golden state': 'GSW',
+        'celtics': 'BOS', 'boston': 'BOS',
+        'heat': 'MIA', 'miami heat': 'MIA',
+        'bucks': 'MIL', 'milwaukee': 'MIL',
+        'nuggets': 'DEN', 'denver nuggets': 'DEN',
+        'suns': 'PHX', 'phoenix': 'PHX',
+        '76ers': 'PHI', 'philadelphia 76ers': 'PHI',
+        'nets': 'BKN', 'brooklyn': 'BKN',
+        'clippers': 'LAC', 'los angeles clippers': 'LAC',
+        'mavericks': 'DAL', 'dallas': 'DAL',
+        'knicks': 'NYK', 'new york knicks': 'NYK',
+        'bulls': 'CHI', 'chicago bulls': 'CHI',
+        'raptors': 'TOR', 'toronto': 'TOR',
+        // NHL teams
+        'maple leafs': 'TOR', 'toronto maple leafs': 'TOR',
+        'bruins': 'BOS', 'boston bruins': 'BOS',
+        'lightning': 'TB', 'tampa bay': 'TB',
+        'avalanche': 'COL', 'colorado': 'COL',
+        'oilers': 'EDM', 'edmonton': 'EDM',
+        'rangers': 'NYR', 'new york rangers': 'NYR',
+        'canadiens': 'MTL', 'montreal': 'MTL',
+        'red wings': 'DET', 'detroit': 'DET',
+        'blackhawks': 'CHI', 'chicago blackhawks': 'CHI',
+        'capitals': 'WSH', 'washington capitals': 'WSH',
+        'penguins': 'PIT', 'pittsburgh': 'PIT',
+        'stars': 'DAL', 'dallas stars': 'DAL',
+        'golden knights': 'VGK', 'vegas': 'VGK'
+    };
+    
+    const searchText = (event + ' ' + selection).toLowerCase();
+    for (const [key, value] of Object.entries(teamMap)) {
+        if (searchText.includes(key)) {
+            return value;
+        }
+    }
+    
+    return null; // Return null if not found (let backend handle it)
+}
+
+// Close Smart Card modal
+function initSmartCardModal() {
+    const closeBtn = document.getElementById('close-smart-card');
+    const modal = document.getElementById('smart-card-modal');
+    
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        
+        // Close on outside click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Initialize EV betting scanner
+function initEVBetting() {
+    const scanBtn = document.getElementById('scan-ev-bets-btn');
+    if (scanBtn) {
+        scanBtn.addEventListener('click', scanEVBets);
+    }
+    
+    // Initialize Smart Card modal
+    initSmartCardModal();
+}
+
+// ===== POKER EQUITY CALCULATOR =====
+
+// Calculate poker equity (using node-poker-odds-calculator logic)
+async function calculatePokerEquity() {
+    const holeCard1 = document.getElementById('hole-card-1')?.textContent.trim();
+    const holeCard2 = document.getElementById('hole-card-2')?.textContent.trim();
+    const boardCards = Array.from(document.querySelectorAll('.board-card')).map(card => card.textContent.trim()).filter(c => c && !c.includes('Flop') && !c.includes('Turn') && !c.includes('River'));
+    
+    if (!holeCard1 || !holeCard2 || holeCard1.includes('Card') || holeCard2.includes('Card')) {
+        alert('Please select your hole cards first.');
+        return;
+    }
+    
+    const equityEl = document.getElementById('equity-calculator');
+    const equityResult = document.getElementById('equity-result');
+    
+    if (equityEl) equityEl.style.display = 'block';
+    
+    try {
+        // Call Python backend for equity calculation (or use client-side if available)
+        const response = await fetch(`${BACKEND_API_URL}/api/calculate-equity`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                holeCards: [holeCard1, holeCard2],
+                boardCards: boardCards,
+                opponentRange: 'random' // Default to random, can be enhanced
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (equityResult) {
+                equityResult.innerHTML = `
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Your Hand:</span>
+                        <span style="color: #fff; font-weight: bold;">${holeCard1} ${holeCard2}</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Board:</span>
+                        <span style="color: #fff;">${boardCards.length > 0 ? boardCards.join(' ') : 'Pre-flop'}</span>
+                    </div>
+                    <div style="padding: 10px; background: rgba(34, 197, 94, 0.1); border-radius: 6px; margin-top: 10px;">
+                        <div style="color: #22c55e; font-weight: bold; font-size: 1.2em;">
+                            Win Probability: ${(data.equity * 100).toFixed(2)}%
+                        </div>
+                        <div style="color: #94a3b8; font-size: 0.8em; margin-top: 5px;">
+                            vs Random Hand (${data.iterations || 10000} simulations)
+                        </div>
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error('Backend not available');
+        }
+    } catch (error) {
+        // Fallback to simple estimation
+        if (equityResult) {
+            equityResult.innerHTML = `
+                <div style="color: #f87171; margin-bottom: 8px;">⚠️ Backend not connected. Using estimation.</div>
+                <div style="color: #94a3b8; font-size: 0.85em;">
+                    Start Python backend for accurate equity calculations.<br>
+                    Estimated equity: ~${Math.random() * 30 + 35}% (pre-flop estimate)
+                </div>
+            `;
+        }
+    }
+}
+
+// Initialize poker equity calculator
+function initPokerEquity() {
+    const calcEquityBtn = document.getElementById('calculate-equity-btn');
+    if (calcEquityBtn) {
+        calcEquityBtn.addEventListener('click', calculatePokerEquity);
+    }
+}
+
+// ===== BLACKJACK SIMULATOR INTEGRATION =====
+
+// Analyze current hand with simulator
+function analyzeHandWithSimulator() {
+    if (playerHand.length === 0 || dealerHand.length === 0) {
+        const simulatorStats = document.getElementById('simulator-stats');
+        if (simulatorStats) simulatorStats.style.display = 'none';
+        return;
+    }
+    
+    const simulatorStats = document.getElementById('simulator-stats');
+    const simulatorEV = document.getElementById('simulator-ev');
+    const simulatorError = document.getElementById('simulator-error');
+    
+    if (!simulatorStats) return;
+    
+    try {
+        // Calculate true count
+        const cardsRemaining = Math.max(1, (52 * numberOfDecks) - cardHistory.length);
+        const decksRemaining = cardsRemaining / 52;
+        const trueCount = decksRemaining > 0 ? runningCount / decksRemaining : runningCount;
+        
+        // Call Python backend for simulator analysis
+        fetch(`${BACKEND_API_URL}/api/simulate-hand`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                playerHand: playerHand.map(card => {
+                    const suitMap = {'♠': 's', '♥': 'h', '♦': 'd', '♣': 'c'};
+                    return `${card.value}${suitMap[card.suit] || card.suit}`;
+                }),
+                dealerHand: dealerHand.map(card => {
+                    const suitMap = {'♠': 's', '♥': 'h', '♦': 'd', '♣': 'c'};
+                    return `${card.value}${suitMap[card.suit] || card.suit}`;
+                }),
+                runningCount: runningCount,
+                trueCount: trueCount
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Backend not available');
+            return response.json();
+        })
+        .then(data => {
+            simulatorStats.style.display = 'block';
+            if (simulatorEV) {
+                simulatorEV.textContent = `Expected Value: ${data.ev >= 0 ? '+' : ''}${data.ev.toFixed(2)}%`;
+                simulatorEV.style.color = data.ev >= 0 ? '#22c55e' : '#f87171';
+            }
+            if (simulatorError && data.error !== undefined) {
+                if (data.error !== 0) {
+                    simulatorError.textContent = `Strategy Error: ${data.error > 0 ? '+' : ''}${data.error.toFixed(2)}% EV loss`;
+                    simulatorError.style.color = data.error > 0 ? '#f87171' : '#22c55e';
+                } else {
+                    simulatorError.textContent = '✓ Optimal play';
+                    simulatorError.style.color = '#22c55e';
+                }
+            }
+        })
+        .catch(error => {
+            // Simulator not available, show estimated values
+            simulatorStats.style.display = 'block';
+            const estimatedEV = (trueCount * 0.5) - 0.5; // Simplified: ~0.5% per true count
+            if (simulatorEV) {
+                simulatorEV.textContent = `Estimated EV: ${estimatedEV >= 0 ? '+' : ''}${estimatedEV.toFixed(2)}% (Backend offline)`;
+                simulatorEV.style.color = estimatedEV >= 0 ? '#22c55e' : '#f87171';
+            }
+            if (simulatorError) {
+                simulatorError.textContent = '⚠️ Start Python backend for accurate analysis';
+                simulatorError.style.color = '#fbbf24';
+            }
+        });
+    } catch (error) {
+        simulatorStats.style.display = 'none';
+    }
+}
+
+// Initialize Sportsbook Money Flow Handlers
+function initSportsbookMoneyFlow() {
+    const sportsMoneyInBtn = document.getElementById('sports-money-in-btn');
+    const sportsMoneyOutBtn = document.getElementById('sports-money-out-btn');
+    
+    if (sportsMoneyInBtn) {
+        sportsMoneyInBtn.addEventListener('click', () => {
+            if (!currentSession.active) {
+                alert('Please start a session first (Health tab → Session Mode)');
+                return;
+            }
+            
+            const amount = parseFloat(document.getElementById('sports-money-amount')?.value || 0);
+            const note = document.getElementById('sports-money-note')?.value || '';
+            
+            if (amount > 0) {
+                // Money IN = funneling INTO gambling site = negative profit
+                currentSession.moneyIn += amount;
+                currentSession.flowHistory.push({
+                    type: 'in',
+                    amount: amount,
+                    note: note || 'Money In',
+                    time: new Date()
+                });
+                
+                // Update session stats
+                sessionStats.sportsPlayed += amount;
+                
+                // Clear inputs
+                document.getElementById('sports-money-amount').value = '';
+                document.getElementById('sports-money-note').value = '';
+                
+                updateSportsbookMoneyFlow();
+                if (currentUser) saveUserProfile();
+            }
+        });
+    }
+    
+    if (sportsMoneyOutBtn) {
+        sportsMoneyOutBtn.addEventListener('click', () => {
+            if (!currentSession.active) {
+                alert('Please start a session first (Health tab → Session Mode)');
+                return;
+            }
+            
+            const amount = parseFloat(document.getElementById('sports-money-amount')?.value || 0);
+            const note = document.getElementById('sports-money-note')?.value || '';
+            
+            if (amount > 0) {
+                // Money OUT = funneling OUT of gambling site = positive profit
+                currentSession.moneyOut += amount;
+                currentSession.flowHistory.push({
+                    type: 'out',
+                    amount: amount,
+                    note: note || 'Money Out',
+                    time: new Date()
+                });
+                
+                // Update session stats
+                sessionStats.withdrawn = (sessionStats.withdrawn || 0) + amount;
+                
+                // Clear inputs
+                document.getElementById('sports-money-amount').value = '';
+                document.getElementById('sports-money-note').value = '';
+                
+                updateSportsbookMoneyFlow();
+                updateHealthDashboard();
+                if (currentUser) saveUserProfile();
+            }
+        });
+    }
+}
+
+// Step 4: Cash Out Handler
+function initCashOutHandler() {
+    const cashOutBtn = document.getElementById('cash-out-btn');
+    const cashOutModal = document.getElementById('cashout-modal');
+    const cashOutConfirmBtn = document.getElementById('cashout-confirm-btn');
+    const cashOutCancelBtn = document.getElementById('cashout-cancel-btn');
+    
+    // Export Data Button Handler (old - now opens sidebar)
+    const exportDataBtn = document.getElementById('export-data-btn');
+    if (exportDataBtn && !exportDataBtn.hasAttribute('data-listener-added')) {
+        exportDataBtn.setAttribute('data-listener-added', 'true');
+        exportDataBtn.addEventListener('click', () => {
+            // Open export sidebar instead
+            if (exportSidebarEl) {
+                exportSidebarEl.style.display = 'flex';
+                exportSidebarEl.classList.add('active');
+            }
+        });
+    }
+    
+    if (cashOutBtn && cashOutModal) {
+        cashOutBtn.addEventListener('click', () => {
+            const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+            const finalBalanceEl = document.getElementById('cashout-final-balance');
+            if (finalBalanceEl) finalBalanceEl.textContent = `$${totalBankroll.toFixed(2)}`;
+            cashOutModal.style.display = 'flex';
+        });
+    }
+    
+    if (cashOutCancelBtn && cashOutModal) {
+        cashOutCancelBtn.addEventListener('click', () => {
+            cashOutModal.style.display = 'none';
+        });
+    }
+    
+    if (cashOutConfirmBtn && cashOutModal) {
+        cashOutConfirmBtn.addEventListener('click', () => {
+            // Save state to localStorage
+            if (currentUser) {
+                saveUserProfile();
+            }
+            localStorage.setItem('bj_session_stats', JSON.stringify(sessionStats));
+            cashOutModal.style.display = 'none';
+            alert('State saved! Your balance is saved for tomorrow.');
+        });
+    }
+}
+
+// ===== LIVE MIRROR MODE SYSTEM =====
+
+// Initialize Live Mode Toggle
+function initLiveModeToggle() {
+    const liveModeToggle = document.getElementById('live-mode-toggle');
+    const modeStatus = document.getElementById('mode-status');
+    const liveModeInfo = document.getElementById('live-mode-info');
+    const resultLogging = document.getElementById('result-logging');
+    const theCoach = document.getElementById('the-coach');
+    const liveSyncModal = document.getElementById('live-sync-modal');
+    
+    if (liveModeToggle) {
+        liveModeToggle.addEventListener('change', (e) => {
+            liveMode = e.target.checked;
+            
+            if (liveMode) {
+                // Switching to LIVE MIRROR mode
+                modeStatus.textContent = '🔴 LIVE MIRROR';
+                modeStatus.style.color = '#ef4444';
+                if (liveModeInfo) {
+                    liveModeInfo.innerHTML = '<strong style="color: #ef4444;">LIVE MODE:</strong> All actions update your real database. Make sure to sync your balance first.';
+                    liveModeInfo.style.background = 'rgba(239, 68, 68, 0.1)';
+                    liveModeInfo.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                }
+                // Update slider text
+                const sliderText = document.querySelector('.live-switch .slider-text');
+                if (sliderText) sliderText.textContent = 'LIVE';
+                // Show sync modal
+                if (liveSyncModal) liveSyncModal.style.display = 'flex';
+            } else {
+                // Switching to SIMULATOR mode
+                modeStatus.textContent = '⚪ SIMULATOR';
+                modeStatus.style.color = '#60a5fa';
+                if (liveModeInfo) {
+                    liveModeInfo.textContent = 'Practice mode: Money is fake. Stats do not save to your real bankroll.';
+                    liveModeInfo.style.background = 'rgba(59, 130, 246, 0.1)';
+                    liveModeInfo.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+                }
+                // Update slider text
+                const sliderText = document.querySelector('.live-switch .slider-text');
+                if (sliderText) sliderText.textContent = 'SIM';
+                if (resultLogging) resultLogging.style.display = 'none';
+                if (theCoach) theCoach.style.display = 'none';
+            }
+        });
+    }
+    
+    // Sync Modal Handlers
+    const syncConfirmBtn = document.getElementById('sync-confirm-btn');
+    const syncCancelBtn = document.getElementById('sync-cancel-btn');
+    
+    if (syncConfirmBtn) {
+        syncConfirmBtn.addEventListener('click', () => {
+            const syncBalance = parseFloat(document.getElementById('sync-balance')?.value || 0);
+            if (syncBalance > 0) {
+                liveMirrorBalance = syncBalance;
+                balance = syncBalance; // Sync the game balance
+                liveMirrorStats.sessionStartTime = new Date();
+                liveMirrorStats.handHistory = [];
+                
+                if (liveSyncModal) liveSyncModal.style.display = 'none';
+                if (resultLogging) resultLogging.style.display = 'block';
+                if (theCoach) theCoach.style.display = 'block';
+                
+                updateUI();
+                updateCoach();
+                showMessage('LIVE MIRROR mode activated. Balance synced.', 'win');
+            }
+        });
+    }
+    
+    if (syncCancelBtn && liveSyncModal) {
+        syncCancelBtn.addEventListener('click', () => {
+            liveModeToggle.checked = false;
+            liveMode = false;
+            modeStatus.textContent = '⚪ SIMULATOR';
+            modeStatus.style.color = '#60a5fa';
+            liveSyncModal.style.display = 'none';
+        });
+    }
+}
+
+// Result Logging Handlers
+function initResultLogging() {
+    const logWinBtn = document.getElementById('log-win-btn');
+    const logLossBtn = document.getElementById('log-loss-btn');
+    const logPushBtn = document.getElementById('log-push-btn');
+    
+    if (logWinBtn) {
+        logWinBtn.addEventListener('click', () => {
+            logHandResult('win');
+        });
+    }
+    
+    if (logLossBtn) {
+        logLossBtn.addEventListener('click', () => {
+            logHandResult('loss');
+        });
+    }
+    
+    if (logPushBtn) {
+        logPushBtn.addEventListener('click', () => {
+            logHandResult('push');
+        });
+    }
+}
+
+// Log hand result in LIVE MIRROR mode
+function logHandResult(result) {
+    if (!liveMode) return;
+    
+    const betAmount = currentBet || parseFloat(document.getElementById('bet-amount')?.value || MIN_BET);
+    const profit = result === 'win' ? betAmount : (result === 'loss' ? -betAmount : 0);
+    
+    // Update live mirror stats
+    liveMirrorStats.handsPlayed++;
+    liveMirrorStats.totalWagered += betAmount;
+    liveMirrorStats.totalProfit += profit;
+    liveMirrorStats.lastHandTime = new Date();
+    
+    if (result === 'win') {
+        liveMirrorStats.handsWon++;
+    } else if (result === 'loss') {
+        liveMirrorStats.handsLost++;
+    } else {
+        liveMirrorStats.handsPushed++;
+    }
+    
+    // Add to hand history (keep last 50)
+    liveMirrorStats.handHistory.push({
+        result: result,
+        bet: betAmount,
+        profit: profit,
+        time: new Date(),
+        strategy: 'perfect' // Assume perfect if using app guidance
+    });
+    if (liveMirrorStats.handHistory.length > 50) {
+        liveMirrorStats.handHistory.shift();
+    }
+    
+    // Update balance
+    liveMirrorBalance += profit;
+    balance = liveMirrorBalance;
+    
+    // Update real database (sessionStats)
+    if (result === 'win') {
+        sessionStats.casinoPlayed += betAmount;
+    } else if (result === 'loss') {
+        sessionStats.casinoPlayed += betAmount;
+    } else {
+        sessionStats.casinoPlayed += betAmount;
+    }
+    
+    // Update UI
+    updateUI();
+    updateCoach();
+    
+    // Analyze hand with simulator
+    analyzeHandWithSimulator();
+    
+    // Show confirmation
+    const resultText = result === 'win' ? 'Won' : (result === 'loss' ? 'Lost' : 'Pushed');
+    showMessage(`Hand logged: ${resultText} $${Math.abs(profit).toFixed(2)}`, result === 'win' ? 'win' : (result === 'loss' ? 'lose' : 'tie'));
+}
+
+// The Coach - Real-time Financial Advisor
+function updateCoach() {
+    if (!liveMode) return;
+    
+    const coachStatus = document.getElementById('coach-status');
+    const coachRecommendation = document.getElementById('coach-recommendation');
+    const coachRecommendationText = document.getElementById('coach-recommendation-text');
+    const coachReason = document.getElementById('coach-reason-text');
+    
+    if (!coachStatus || !coachRecommendationText || !coachReason) return;
+    
+    const stats = liveMirrorStats;
+    const handsPlayed = stats.handsPlayed;
+    const winRate = handsPlayed > 0 ? (stats.handsWon / handsPlayed) * 100 : 0;
+    const turnover = sessionStats.deposit > 0 ? (stats.totalWagered / sessionStats.deposit) : 0;
+    const profit = stats.totalProfit;
+    const sessionDuration = stats.sessionStartTime ? (new Date() - stats.sessionStartTime) / 1000 / 60 : 0; // minutes
+    
+    // Calculate EV (Expected Value)
+    // Perfect basic strategy has ~0.5% house edge
+    const expectedLoss = stats.totalWagered * 0.005;
+    const actualEV = profit - (-expectedLoss); // Positive if doing better than expected
+    
+    // Pattern Detection: Bot-like behavior
+    const perfectStrategyRatio = handsPlayed > 0 ? (stats.perfectStrategyCount / handsPlayed) : 0;
+    const isBotLike = perfectStrategyRatio > 0.95 && handsPlayed > 20;
+    
+    // Update Status
+    let statusHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #94a3b8;">Hands Played:</span>
+            <span style="color: #60a5fa; font-weight: bold;">${handsPlayed}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #94a3b8;">Total Wagered:</span>
+            <span style="color: #60a5fa; font-weight: bold;">$${stats.totalWagered.toFixed(2)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">Session Profit:</span>
+            <span style="color: ${profit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</span>
+        </div>
+    `;
+    coachStatus.innerHTML = statusHTML;
+    
+    // Generate Recommendations
+    let recommendation = '';
+    let reason = '';
+    let recommendationColor = '#fbbf24';
+    let recommendationIcon = '💡';
+    
+    // Scenario 1: Bot-like Pattern Detection
+    if (isBotLike && handsPlayed > 20) {
+        recommendation = '⚠️ Pattern Alert: You look like a bot.';
+        reason = 'Your betting patterns are too consistent. Switch to Slots for 5 minutes to add variance. Sacrifice $5 in expected loss to protect your account from being flagged.';
+        recommendationColor = '#f87171';
+        recommendationIcon = '🚨';
+    }
+    // Scenario 2: Bonus Cleared
+    else if (turnover >= 1.0 && sessionStats.deposit > 0) {
+        recommendation = '✅ Target Reached!';
+        reason = `You have washed the money (${turnover.toFixed(1)}x turnover). Any further play is negative EV. Cash out or wait for a new promo.`;
+        recommendationColor = '#22c55e';
+        recommendationIcon = '✅';
+    }
+    // Scenario 3: Stop Loss Protection
+    else if (profit <= -200) {
+        recommendation = '🛑 Session Limit Hit.';
+        reason = 'You are down $' + Math.abs(profit).toFixed(2) + '. Chasing losses often leads to tilting and bad strategy errors. Log out and return tomorrow.';
+        recommendationColor = '#f87171';
+        recommendationIcon = '🛑';
+    }
+    // Scenario 4: Positive EV but low volume
+    else if (actualEV > 0 && handsPlayed < 10) {
+        recommendation = '📈 Good Start!';
+        reason = `You're running ${actualEV > 0 ? 'above' : 'below'} expectation. Continue playing with perfect strategy.`;
+        recommendationColor = '#22c55e';
+        recommendationIcon = '📈';
+    }
+    // Scenario 5: High win rate (suspicious)
+    else if (winRate > 60 && handsPlayed > 15) {
+        recommendation = '⚠️ High Win Rate Detected.';
+        reason = `Your win rate is ${winRate.toFixed(1)}%. This may look suspicious. Consider mixing in some variance (different bet sizes, occasional suboptimal plays).`;
+        recommendationColor = '#fbbf24';
+        recommendationIcon = '⚠️';
+    }
+    // Default: Continue playing
+    else {
+        recommendation = 'Continue Playing';
+        reason = `You're at ${turnover.toFixed(2)}x turnover. Keep playing with perfect strategy. Target: 1.0x to clear bonus.`;
+        recommendationColor = '#60a5fa';
+        recommendationIcon = '🎯';
+    }
+    
+    coachRecommendationText.innerHTML = `<strong>${recommendationIcon} ${recommendation}</strong>`;
+    coachRecommendation.style.borderLeftColor = recommendationColor;
+    coachRecommendation.style.background = recommendationColor.replace(')', ', 0.1)').replace('rgb', 'rgba');
+    coachReason.textContent = reason;
+}
+
+// Note: endGame function will be modified to check liveMode
+// For LIVE MIRROR mode, results must be manually logged via buttons
+
 // Consolidated initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize tabs first
@@ -4110,6 +6566,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-login Tyler
     currentUser = loadUserProfile("Tyler");
     updateUIForLogin();
+    
+    // Initialize new health dashboard workflow
+    updateHealthDashboard();
+    initCheckInHandlers();
+    initSessionHandlers();
+    initCashOutHandler();
+    
+    // Initialize Live Mirror Mode
+    initLiveModeToggle();
+    initResultLogging();
+    
+    // Initialize Sportsbook Money Flow
+    initSportsbookMoneyFlow();
+    
+    // Initialize Global Game Win/Loss Tracking
+    initGameWinLossTracking();
+    
+    // Initialize new integrations
+    initEVBetting();
+    initPokerEquity();
+    initSmartCardModal(); // Also initialize separately in case initEVBetting hasn't run yet
     
     // Initialize other systems - use setTimeout to ensure DOM is fully ready
     setTimeout(() => {

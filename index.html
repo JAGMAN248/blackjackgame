@@ -26,6 +26,7 @@
         <button class="tab-btn" data-tab="tab-guide">📚 Guide</button>
     </nav>
 
+
     <main class="tab-content">
         <!-- Tab 1: The Wash Counter (Existing Game) -->
         <div id="tab-wash" class="tab-pane active">
@@ -34,11 +35,18 @@
                     <div class="advisor-header">
                         <h3>🎯 Strategy Advisor</h3>
                     </div>
-            <div class="advisor-content">
+                    <div class="advisor-content">
                 <div class="recommendation" id="recommendation">
                     <p>Place a bet to get strategy advice</p>
                 </div>
                 <div class="advisor-details" id="advisor-details"></div>
+                
+                <!-- Blackjack Simulator Integration -->
+                <div id="simulator-stats" style="margin-top: 15px; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; display: none;">
+                    <div style="color: #fbbf24; font-size: 0.85em; font-weight: bold; margin-bottom: 8px;">🎯 Simulator Analysis</div>
+                    <div id="simulator-ev" style="color: #cbd5e1; font-size: 0.8em; margin-bottom: 5px;"></div>
+                    <div id="simulator-error" style="color: #f87171; font-size: 0.8em;"></div>
+                </div>
             </div>
         </div>
         
@@ -197,7 +205,20 @@
             <button id="split-btn" class="btn btn-split" disabled>Split</button>
             <button id="insurance-btn" class="btn btn-insurance" disabled>Insurance</button>
             <button id="surrender-btn" class="btn btn-surrender" disabled>Surrender</button>
-            <button id="new-game-btn" class="btn btn-new-game" disabled>New Game</button>
+            <button id="new-game-btn" class="btn btn-new-game" disabled>Reset Shoe</button>
+        </div>
+        
+        <!-- Result Logging (LIVE MIRROR Mode Only) -->
+        <div id="result-logging" style="display: none; margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.1); border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.3);">
+            <div style="color: #f87171; font-weight: bold; margin-bottom: 10px; font-size: 0.9em;">📝 Log Hand Result</div>
+            <div style="display: flex; gap: 10px;">
+                <button id="log-win-btn" class="btn" style="flex: 1; background: #22c55e;">✅ Won</button>
+                <button id="log-loss-btn" class="btn" style="flex: 1; background: #ef4444;">❌ Lost</button>
+                <button id="log-push-btn" class="btn" style="flex: 1; background: #fbbf24; color: #000;">🤝 Push</button>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.85em; color: #94a3b8;">
+                After playing a hand on the real site, click the result to update your tracking.
+            </div>
         </div>
 
         <div class="message" id="message"></div>
@@ -241,80 +262,113 @@
     <div id="tab-health" class="tab-pane">
         <div class="dashboard-container" style="max-width: 1200px;">
             <h2>❤️ Money Lifecycle Tracker</h2>
-            <p style="color: #94a3b8;">Track where your money came from, plan how to play it, and see your account health projection.</p>
             
-            <!-- Section 1: The Wallet (Source of Funds) -->
-            <div class="wallet-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">💰 The Wallet: Where Did This Money Come From?</h3>
+            <!-- Step 1: Dashboard (Read-Only Overview) -->
+            <div id="health-dashboard" class="health-dashboard-section" style="margin-top: 25px; padding: 25px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.2em; margin-bottom: 20px;">📊 Dashboard</h3>
                 
-                <div id="wallet-entries" class="wallet-entries">
-                    <!-- Wallet entries will be added dynamically -->
+                <!-- Top Card: Total Bankroll -->
+                <div style="padding: 20px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%); border-radius: 10px; margin-bottom: 20px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <div style="font-size: 0.9em; color: #94a3b8; margin-bottom: 8px;">Total Bankroll</div>
+                    <div id="dashboard-total-bankroll" style="font-size: 2em; font-weight: bold; color: #60a5fa;">$0.00</div>
                 </div>
                 
-                <button id="add-wallet-entry-btn" class="btn btn-small" style="margin-top: 15px; width: 100%;">
-                    + Add Money Source
-                </button>
+                <!-- Health Gauge: Risk Level -->
+                <div style="padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; margin-bottom: 20px;">
+                    <div style="font-size: 0.9em; color: #94a3b8; margin-bottom: 8px;">Health Gauge</div>
+                    <div id="dashboard-risk-level" style="font-size: 1.5em; font-weight: bold; color: #22c55e;">Risk Level: Low (Clean)</div>
+                    <div style="margin-top: 10px; font-size: 0.85em; color: #cbd5e1;">
+                        <div>Clean Money: <span id="dashboard-clean-money" style="color: #22c55e;">$0.00</span></div>
+                        <div>Dirty Money: <span id="dashboard-dirty-money" style="color: #f87171;">$0.00</span></div>
+                    </div>
+                </div>
                 
-                <div class="wallet-summary" style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 3px solid #3b82f6;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #cbd5e1; font-weight: bold;">Total Bankroll:</span>
-                        <span id="total-bankroll" style="color: #60a5fa; font-size: 1.3em; font-weight: bold;">$0.00</span>
-                    </div>
-                    <div style="margin-top: 10px; display: flex; justify-content: space-between; font-size: 0.9em;">
-                        <span style="color: #94a3b8;">Clean Money:</span>
-                        <span id="clean-money-total" style="color: #22c55e;">$0.00</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.9em;">
-                        <span style="color: #94a3b8;">Dirty Money:</span>
-                        <span id="dirty-money-total" style="color: #f87171;">$0.00</span>
-                    </div>
+                <!-- Action Required -->
+                <div id="dashboard-action-required" style="padding: 20px; background: rgba(251, 191, 36, 0.1); border-radius: 10px; border-left: 4px solid #fbbf24;">
+                    <div style="font-size: 0.9em; color: #94a3b8; margin-bottom: 8px;">Action Required</div>
+                    <div id="dashboard-action-text" style="font-size: 1.1em; color: #fbbf24; line-height: 1.6;">No action needed. All funds are clean.</div>
                 </div>
             </div>
             
-            <!-- Section 2: The Mixing Bowl (Visual) -->
-            <div class="mixing-bowl-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">🔄 The Mixing Bowl: Washing Process</h3>
+            <!-- Step 2: Check-In (Add Funds / Withdraw) -->
+            <div id="health-checkin" class="health-checkin-section" style="margin-top: 25px; padding: 25px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.2em; margin-bottom: 20px;">💰 Check-In</h3>
+                <p style="color: #94a3b8; margin-bottom: 20px;">Update your wallet when you deposit or withdraw funds.</p>
                 
-                <div class="mixing-bowl-visual" style="margin-bottom: 15px;">
-                    <div style="margin-bottom: 10px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="color: #cbd5e1; font-size: 0.9em;">Dirty Money (Needs Washing)</span>
-                            <span id="dirty-percentage" style="color: #f87171; font-weight: bold;">0%</span>
+                <div style="display: flex; gap: 15px;">
+                    <button id="add-funds-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+                        ➕ Add Funds
+                    </button>
+                    <button id="withdraw-funds-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                        ➖ Withdraw
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 3: Session Mode (Active Tracking) -->
+            <div id="health-session" class="health-session-section" style="margin-top: 25px; padding: 25px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.2em; margin-bottom: 20px;">🎮 Session Mode</h3>
+                
+                <!-- Session Not Started -->
+                <div id="session-not-started" style="display: block;">
+                    <p style="color: #94a3b8; margin-bottom: 20px;">Start a new session to track your play in real-time.</p>
+                    <button id="start-session-btn" class="btn" style="width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                        ▶️ Start New Session
+                    </button>
+                </div>
+                
+                <!-- Session Active -->
+                <div id="session-active" style="display: none;">
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border-left: 4px solid #22c55e;">
+                        <div style="color: #22c55e; font-weight: bold; margin-bottom: 8px;">Session Active</div>
+                        <div style="color: #cbd5e1; font-size: 0.9em;">
+                            <div>Site: <strong id="session-site">-</strong></div>
+                            <div>Game: <strong id="session-game">-</strong></div>
+                            <div>Started: <strong id="session-start-time">-</strong></div>
                         </div>
-                        <div class="wash-bar" style="width: 100%; height: 30px; background: rgba(0, 0, 0, 0.5); border-radius: 15px; overflow: hidden; position: relative;">
-                            <div id="dirty-bar" style="height: 100%; background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); width: 0%; transition: width 0.3s;"></div>
-                            <div id="clean-bar" style="height: 100%; background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); width: 0%; transition: width 0.3s; position: absolute; top: 0; right: 0;"></div>
+                    </div>
+                    
+                    <!-- Live Tracker -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #cbd5e1; margin-bottom: 10px;">Live Tracker</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <input type="number" id="session-win-amount" placeholder="Won amount" step="0.01" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                            <button id="record-win-btn" class="btn btn-small" style="background: #22c55e;">Record Win</button>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="session-loss-amount" placeholder="Lost amount" step="0.01" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                            <button id="record-loss-btn" class="btn btn-small" style="background: #ef4444;">Record Loss</button>
                         </div>
                     </div>
-                    <div style="margin-top: 15px; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; font-size: 0.85em; color: #94a3b8;">
-                        <div id="wash-status">No dirty money to wash yet.</div>
+                    
+                    <!-- Session Summary -->
+                    <div style="padding: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 15px;">
+                        <div style="color: #cbd5e1; font-size: 0.9em;">
+                            <div>Session Total: <strong id="session-total" style="color: #60a5fa;">$0.00</strong></div>
+                            <div>Wins: <strong id="session-wins" style="color: #22c55e;">$0.00</strong></div>
+                            <div>Losses: <strong id="session-losses" style="color: #f87171;">$0.00</strong></div>
+                        </div>
                     </div>
+                    
+                    <button id="end-session-btn" class="btn" style="width: 100%; background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);">
+                        🛑 End Session
+                    </button>
                 </div>
             </div>
             
-            <!-- Section 3: The Session Planner -->
-            <div class="session-planner-section" style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">📋 Plan Your Play: How Will You Wash It?</h3>
-                
-                <div id="planned-activities" class="planned-activities">
-                    <!-- Planned activities will be added here -->
-                </div>
-                
-                <button id="add-activity-btn" class="btn btn-small" style="margin-top: 15px; width: 100%;">
-                    + Add Activity
+            <!-- Step 4: Cash Out (End of Day) -->
+            <div id="health-cashout" class="health-cashout-section" style="margin-top: 25px; padding: 25px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h3 style="color: #fbbf24; font-size: 1.2em; margin-bottom: 20px;">💵 Cash Out</h3>
+                <p style="color: #94a3b8; margin-bottom: 20px;">End your day and save your final balance.</p>
+                <button id="cash-out-btn" class="btn" style="width: 100%; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-bottom: 10px;">
+                    💾 End Day & Save State
                 </button>
-                
-                <div class="activity-summary" style="margin-top: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 3px solid #fbbf24;">
-                    <div style="color: #fbbf24; font-weight: bold; margin-bottom: 10px;">Projected Results:</div>
-                    <div id="projected-stats" style="font-size: 0.9em; color: #cbd5e1; line-height: 1.8;">
-                        <div>Total Planned Wagering: <strong id="projected-wagering" style="color: #60a5fa;">$0.00</strong></div>
-                        <div>Projected Turnover: <strong id="projected-turnover" style="color: #60a5fa;">0.0x</strong></div>
-                        <div>Dirty Money Washed: <strong id="projected-washed" style="color: #22c55e;">0%</strong></div>
-                    </div>
-                </div>
+                <button id="export-data-btn" class="btn" style="width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                    📁 Export Data & Session History
+                </button>
             </div>
             
-            <!-- Section 4: Account Health Projection -->
+            <!-- Account Health Status (Legacy - kept for compatibility) -->
             <div id="health-status" class="health-status" style="margin-top: 25px;"></div>
             
             <!-- Legacy Free Spins Section (Hidden but kept for backward compatibility) -->
@@ -374,6 +428,123 @@
             <h2>🏈 Sportsbook Migrator</h2>
             <p>Analyze odds, hedge costs, and build camouflage parlays.</p>
             
+            <!-- Money Flow Tracker (Only visible when session is active) -->
+            <div id="sports-money-flow" style="display: none; margin-bottom: 25px; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 12px; border: 2px solid rgba(59, 130, 246, 0.3);">
+                <h3 style="color: #60a5fa; font-size: 1.1em; margin-bottom: 15px;">💰 Money Flow Tracker</h3>
+                <div style="margin-bottom: 15px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Current Balance:</span>
+                        <span id="sports-balance" style="color: #60a5fa; font-weight: bold; font-size: 1.2em;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #94a3b8;">Session Profit:</span>
+                        <span id="sports-profit" style="color: #22c55e; font-weight: bold; font-size: 1.1em;">$0.00</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #cbd5e1; margin-bottom: 8px; font-weight: bold;">Track Money Flow</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="sports-money-amount" step="0.01" min="0" placeholder="Amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="sports-money-in-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">💰 Money In</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="sports-money-note" placeholder="Note (optional)" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="sports-money-out-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">💵 Money Out</button>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 0.85em; color: #94a3b8; line-height: 1.4;">
+                        💡 <strong>Money In</strong> = Deposit/Transfer TO gambling site (reduces profit)<br>
+                        💡 <strong>Money Out</strong> = Withdrawal/Transfer FROM gambling site (increases profit)
+                    </div>
+                </div>
+                
+                <div id="sports-flow-history" style="max-height: 200px; overflow-y: auto; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; font-size: 0.85em;">
+                    <div style="color: #94a3b8; margin-bottom: 8px; font-weight: bold;">Recent Transactions:</div>
+                    <div id="sports-flow-list" style="color: #cbd5e1;">No transactions yet.</div>
+                </div>
+            </div>
+            
+            <!-- Value Finder Section (EV Betting) -->
+            <div style="margin-bottom: 25px; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 12px; border: 2px solid rgba(34, 197, 94, 0.3);">
+                <h3 style="color: #22c55e; font-size: 1.2em; margin-bottom: 15px;">💰 Value Finder (+EV Bet Scanner)</h3>
+                <p style="color: #94a3b8; margin-bottom: 15px; font-size: 0.9em;">
+                    Scans US sportsbooks for profitable bets using Kelly Criterion. Powered by The Odds API.
+                </p>
+                
+                <div style="margin-bottom: 15px;">
+                    <button id="scan-ev-bets-btn" class="btn" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); width: 100%; margin-bottom: 10px;">
+                        🔍 Scan for +EV Bets
+                    </button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="ev-bankroll" step="0.01" min="0" placeholder="Bankroll ($)" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <select id="ev-sport" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                            <option value="basketball_nba">NBA (ML Model)</option>
+                            <option value="americanfootball_nfl">NFL (EPA Model)</option>
+                            <option value="icehockey_nhl">NHL (xG Model)</option>
+                            <option value="baseball_mlb">MLB</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Hot Bet Alerts -->
+                <div id="hot-bets-container" style="display: none;">
+                    <div style="color: #fbbf24; font-weight: bold; margin-bottom: 10px; font-size: 0.9em;">🔥 Hot Bets Found:</div>
+                    <div id="hot-bets-list" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+                
+                <!-- Smart Card Modal (shows when clicking a hot bet) -->
+                <div id="smart-card-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+                    <div style="max-width: 500px; background: rgba(0,0,0,0.95); padding: 30px; border-radius: 12px; border: 2px solid rgba(34, 197, 94, 0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="color: #22c55e; margin: 0;">🎯 Smart Bet Analysis</h3>
+                            <button id="close-smart-card" style="background: transparent; border: none; color: #fff; font-size: 1.5em; cursor: pointer;">×</button>
+                        </div>
+                        
+                        <div id="smart-card-content">
+                            <!-- Market Signal -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                <div style="color: #60a5fa; font-weight: bold; margin-bottom: 8px;">📊 Market Signal</div>
+                                <div id="market-signal-text" style="color: #cbd5e1; font-size: 0.9em;"></div>
+                            </div>
+                            
+                            <!-- Model Signal -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; border-left: 4px solid #fbbf24;">
+                                <div style="color: #fbbf24; font-weight: bold; margin-bottom: 8px;">🧠 Model Signal</div>
+                                <div id="model-signal-text" style="color: #cbd5e1; font-size: 0.9em;"></div>
+                                <div id="model-details" style="margin-top: 10px; font-size: 0.85em; color: #94a3b8;"></div>
+                            </div>
+                            
+                            <!-- Confidence Score -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <span style="color: #cbd5e1; font-weight: bold;">Confidence Score:</span>
+                                    <span id="confidence-score" style="color: #22c55e; font-size: 1.2em; font-weight: bold;">0%</span>
+                                </div>
+                                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div id="confidence-bar" style="height: 100%; background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Recommendation -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border-left: 4px solid #22c55e;">
+                                <div style="color: #22c55e; font-weight: bold; margin-bottom: 8px;">✅ Recommendation</div>
+                                <div id="recommendation-text" style="color: #cbd5e1; font-size: 0.9em; line-height: 1.5;"></div>
+                            </div>
+                            
+                            <!-- Bet Size -->
+                            <div style="padding: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                                <div style="color: #cbd5e1; font-weight: bold; margin-bottom: 8px;">💰 Suggested Bet Size</div>
+                                <div id="bet-size-text" style="color: #fbbf24; font-size: 1.1em; font-weight: bold;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="ev-scan-status" style="padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; font-size: 0.85em; color: #94a3b8; display: none;">
+                    Scanning odds...
+                </div>
+            </div>
+            
             <div class="parlay-calc">
                 <!-- API Integration Section -->
                 <div class="api-section" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -392,6 +563,38 @@
                 </div>
                 <button id="calc-parlay-btn" class="btn btn-small">Calculate Camouflage Value</button>
                 <div id="parlay-result" class="parlay-result"></div>
+            </div>
+            
+            <!-- Win/Loss Tracker for Sportsbook -->
+            <div style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 12px; border: 2px solid rgba(59, 130, 246, 0.3);">
+                <h3 style="color: #60a5fa; font-size: 1.1em; margin-bottom: 15px;">📊 Sportsbook Win/Loss Tracker</h3>
+                
+                <div style="margin-bottom: 15px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Wins:</span>
+                        <span id="sports-wins" style="color: #22c55e; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Losses:</span>
+                        <span id="sports-losses" style="color: #f87171; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <span style="color: #cbd5e1; font-weight: bold;">Net Profit:</span>
+                        <span id="sports-net-profit" style="color: #60a5fa; font-weight: bold; font-size: 1.1em;">$0.00</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #cbd5e1; margin-bottom: 8px; font-weight: bold;">Record Result</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="sports-win-amount" step="0.01" min="0" placeholder="Win amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="sports-record-win-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">✅ Record Win</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="sports-loss-amount" step="0.01" min="0" placeholder="Loss amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="sports-record-loss-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">❌ Record Loss</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -420,6 +623,38 @@
                 </div>
                 <button id="calc-craps-btn" class="btn btn-small">Calculate Lay Odds</button>
                 <div id="craps-result" class="scanner-result"></div>
+            </div>
+            
+            <!-- Win/Loss Tracker for Craps -->
+            <div style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 12px; border: 2px solid rgba(139, 92, 246, 0.3);">
+                <h3 style="color: #8b5cf6; font-size: 1.1em; margin-bottom: 15px;">📊 Craps Win/Loss Tracker</h3>
+                
+                <div style="margin-bottom: 15px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Wins:</span>
+                        <span id="craps-wins" style="color: #22c55e; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Losses:</span>
+                        <span id="craps-losses" style="color: #f87171; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <span style="color: #cbd5e1; font-weight: bold;">Net Profit:</span>
+                        <span id="craps-net-profit" style="color: #8b5cf6; font-weight: bold; font-size: 1.1em;">$0.00</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #cbd5e1; margin-bottom: 8px; font-weight: bold;">Record Result</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="craps-win-amount" step="0.01" min="0" placeholder="Win amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="craps-record-win-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">✅ Record Win</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="craps-loss-amount" step="0.01" min="0" placeholder="Loss amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="craps-record-loss-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">❌ Record Loss</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -482,6 +717,9 @@
                     
                     <div class="poker-section">
                         <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 2: Hole Cards</h3>
+                        <div style="margin-bottom: 10px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; font-size: 0.85em; color: #94a3b8;">
+                            💡 <strong>Equity Calculator:</strong> Win % calculated using node-poker-odds-calculator
+                        </div>
                         <div class="quick-row">
                             <button class="quick-btn" data-hole="AsKs">AA/KK+</button>
                             <button class="quick-btn" data-hole="AdKc">AKo</button>
@@ -570,8 +808,12 @@
                 
                 <!-- Center Column: Hand Matrix -->
                 <div class="poker-matrix">
+                    <!-- Header/Title -->
                     <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px; text-align: center;">Hand Matrix (13x13)</h3>
+                    
+                    <!-- The Grid is INSIDE the box -->
                     <div id="hand-matrix" class="hand-matrix-grid"></div>
+                    
                     <div class="matrix-legend">
                         <div class="legend-item"><span class="legend-color" style="background: #ef4444;"></span> Raise</div>
                         <div class="legend-item"><span class="legend-color" style="background: #22c55e;"></span> Call</div>
@@ -587,6 +829,49 @@
                         <div class="strategy-frequencies" id="strategy-frequencies"></div>
                         <div class="strategy-sizing" id="strategy-sizing"></div>
                         <div class="strategy-context" id="strategy-context"></div>
+                    </div>
+                    
+                    <!-- Equity Calculator Results -->
+                    <div id="equity-calculator" style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); display: none;">
+                        <h4 style="color: #60a5fa; font-size: 0.9em; margin-bottom: 10px;">📊 Equity Calculator</h4>
+                        <div id="equity-result" style="color: #cbd5e1; font-size: 0.85em;">
+                            Calculate equity by entering your hand and opponent range.
+                        </div>
+                        <button id="calculate-equity-btn" class="btn" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); font-size: 0.9em;">
+                            Calculate Win %
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Win/Loss Tracker for Poker -->
+            <div style="margin-top: 25px; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 12px; border: 2px solid rgba(251, 191, 36, 0.3);">
+                <h3 style="color: #fbbf24; font-size: 1.1em; margin-bottom: 15px;">📊 Poker Win/Loss Tracker</h3>
+                
+                <div style="margin-bottom: 15px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Wins:</span>
+                        <span id="poker-wins" style="color: #22c55e; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Losses:</span>
+                        <span id="poker-losses" style="color: #f87171; font-weight: bold;">$0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <span style="color: #cbd5e1; font-weight: bold;">Net Profit:</span>
+                        <span id="poker-net-profit" style="color: #fbbf24; font-weight: bold; font-size: 1.1em;">$0.00</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #cbd5e1; margin-bottom: 8px; font-weight: bold;">Record Result</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="number" id="poker-win-amount" step="0.01" min="0" placeholder="Win amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="poker-record-win-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">✅ Record Win</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="poker-loss-amount" step="0.01" min="0" placeholder="Loss amount" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                        <button id="poker-record-loss-btn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">❌ Record Loss</button>
                     </div>
                 </div>
             </div>
@@ -688,6 +973,121 @@
         </div>
     </div>
 
+    <!-- Add Funds Modal -->
+    <div id="add-funds-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 12px;">
+            <h2 style="color: #fbbf24; margin-bottom: 20px;">➕ Add Funds</h2>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Amount ($)</label>
+                <input type="number" id="add-funds-amount" step="0.01" min="0" placeholder="100.00" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Source</label>
+                <select id="add-funds-source" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <option value="bonus-match">Bonus Match</option>
+                    <option value="gift-card">Gift Card</option>
+                    <option value="direct-deposit">Direct Deposit</option>
+                    <option value="transfer">Transfer from Other Site</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="add-funds-confirm-btn" class="btn" style="flex: 1; background: #22c55e;">Confirm</button>
+                <button id="add-funds-cancel-btn" class="btn" style="flex: 1; background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Withdraw Modal -->
+    <div id="withdraw-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 12px;">
+            <h2 style="color: #fbbf24; margin-bottom: 20px;">➖ Withdraw</h2>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Amount ($)</label>
+                <input type="number" id="withdraw-amount" step="0.01" min="0" placeholder="100.00" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Destination</label>
+                <select id="withdraw-destination" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <option value="bank">Bank Account</option>
+                    <option value="crypto">Crypto Wallet</option>
+                    <option value="other-site">Other Site</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="withdraw-confirm-btn" class="btn" style="flex: 1; background: #ef4444;">Confirm</button>
+                <button id="withdraw-cancel-btn" class="btn" style="flex: 1; background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Start Session Modal -->
+    <div id="start-session-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 12px;">
+            <h2 style="color: #fbbf24; margin-bottom: 20px;">▶️ Start New Session</h2>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Which site?</label>
+                <select id="session-site-select" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <option value="pokerstars">PokerStars</option>
+                    <option value="draftkings">DraftKings</option>
+                    <option value="fanduel">FanDuel</option>
+                    <option value="betmgm">BetMGM</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">What game?</label>
+                <select id="session-game-select" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <option value="blackjack">Blackjack</option>
+                    <option value="poker">Poker</option>
+                    <option value="slots">Slots</option>
+                    <option value="sports">Sports</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="start-session-confirm-btn" class="btn" style="flex: 1; background: #3b82f6;">Start</button>
+                <button id="start-session-cancel-btn" class="btn" style="flex: 1; background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cash Out Confirmation Modal -->
+    <div id="cashout-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 12px;">
+            <h2 style="color: #fbbf24; margin-bottom: 20px;">💵 Cash Out</h2>
+            <div style="margin-bottom: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+                <div style="color: #cbd5e1; margin-bottom: 8px;">Final Balance</div>
+                <div id="cashout-final-balance" style="font-size: 1.5em; font-weight: bold; color: #60a5fa;">$0.00</div>
+            </div>
+            <p style="color: #94a3b8; margin-bottom: 20px;">Is this correct? This will save your state for tomorrow.</p>
+            <div style="display: flex; gap: 10px;">
+                <button id="cashout-confirm-btn" class="btn" style="flex: 1; background: #8b5cf6;">Yes, Save</button>
+                <button id="cashout-cancel-btn" class="btn" style="flex: 1; background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE MIRROR Sync Modal -->
+    <div id="live-sync-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="dashboard-container" style="max-width: 400px; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 12px; border: 2px solid rgba(239, 68, 68, 0.3);">
+            <h2 style="color: #ef4444; margin-bottom: 10px;">🔴 LIVE MIRROR Mode</h2>
+            <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9em;">Sync your app with your real casino balance.</p>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Current Casino Balance ($)</label>
+                <input type="number" id="sync-balance" step="0.01" min="0" placeholder="500.00" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+            </div>
+            <div style="padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; margin-bottom: 20px; font-size: 0.85em; color: #f87171;">
+                ⚠️ <strong>Warning:</strong> In LIVE MIRROR mode, all actions update your real database. Make sure you're tracking accurately.
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="sync-confirm-btn" class="btn" style="flex: 1; background: #ef4444;">Sync & Start</button>
+                <button id="sync-cancel-btn" class="btn" style="flex: 1; background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Login Modal -->
     <div id="login-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
         <div class="dashboard-container" style="max-width: 400px;">
@@ -699,6 +1099,91 @@
             <div style="margin-top: 20px; display: flex; gap: 10px;">
                 <button id="modal-login-btn" class="btn">Login</button>
                 <button id="modal-cancel-btn" class="btn" style="background: #64748b;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Side Simulator Mode Panel (hidden until icon is clicked) -->
+    <div class="simulator-sidebar" style="display: none;">
+        <div class="simulator-panel" id="simulator-panel">
+            <div class="simulator-header">
+                <h3>🎮 Mode Selector</h3>
+                <button class="close-simulator-btn" id="close-simulator-btn" style="background: transparent; border: none; color: #fff; font-size: 1.5em; cursor: pointer; padding: 0; width: 30px; height: 30px;">×</button>
+            </div>
+            <div class="simulator-content">
+                <!-- Live Switch Toggle -->
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.9em; color: #94a3b8; margin-bottom: 5px;">Current Mode</div>
+                            <div id="mode-status" style="font-size: 1.2em; font-weight: bold; color: #60a5fa;">⚪ SIMULATOR</div>
+                        </div>
+                        <label class="live-switch" style="position: relative; display: inline-block; width: 100px; height: 45px;">
+                            <input type="checkbox" id="live-mode-toggle" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #3b82f6; transition: 0.4s; border-radius: 50px;">
+                                <span class="slider-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-weight: bold; font-size: 0.7em; white-space: nowrap; pointer-events: none;">SIM</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div id="live-mode-info" style="padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; font-size: 0.85em; color: #94a3b8; line-height: 1.5;">
+                        Practice mode: Money is fake. Stats do not save to your real bankroll.
+                    </div>
+                </div>
+                
+                <!-- The Coach (Only visible in LIVE MIRROR mode) -->
+                <div id="the-coach" class="the-coach" style="display: none; margin-top: 20px; padding: 15px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 2px solid rgba(251, 191, 36, 0.3);">
+                    <div class="coach-header" style="margin-bottom: 12px;">
+                        <h4 style="color: #fbbf24; font-size: 1em; margin: 0;">🎓 The Coach</h4>
+                    </div>
+                    <div id="coach-status" class="coach-status" style="padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; margin-bottom: 8px; font-size: 0.85em;">
+                        <div style="color: #94a3b8;">Waiting for session data...</div>
+                    </div>
+                    <div id="coach-recommendation" class="coach-recommendation" style="padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 6px; border-left: 3px solid #fbbf24; margin-bottom: 8px;">
+                        <div style="color: #fbbf24; font-weight: bold; margin-bottom: 4px; font-size: 0.85em;">Recommendation</div>
+                        <div id="coach-recommendation-text" style="color: #cbd5e1; font-size: 0.8em; line-height: 1.4;">Start playing to get recommendations.</div>
+                    </div>
+                    <div id="coach-reason" class="coach-reason" style="padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; font-size: 0.75em; color: #94a3b8; line-height: 1.3;">
+                        <div id="coach-reason-text">The Coach monitors your play patterns and account health.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Side Export Panel (hidden until export button is pressed) -->
+    <div class="export-sidebar" style="display: none;">
+        <div class="export-panel" id="export-panel">
+            <div class="export-header">
+                <h3>📁 Export Data & Session History</h3>
+                <button class="close-export-btn" id="close-export-btn" style="background: transparent; border: none; color: #fff; font-size: 1.5em; cursor: pointer; padding: 0; width: 30px; height: 30px;">×</button>
+            </div>
+            <div class="export-content">
+                <p style="color: #94a3b8; margin-bottom: 20px; line-height: 1.6;">
+                    Export your session history, statistics, and game data to .txt files. 
+                    Choose a folder location and the app will create organized files for you.
+                </p>
+                
+                <div id="export-status" style="margin-bottom: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 3px solid #3b82f6; display: none;">
+                    <div style="color: #60a5fa; font-weight: bold; margin-bottom: 8px;">Status</div>
+                    <div id="export-status-text" style="color: #cbd5e1; font-size: 0.9em; line-height: 1.5;"></div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <div style="color: #cbd5e1; font-weight: bold; margin-bottom: 10px;">What will be exported:</div>
+                    <ul style="color: #94a3b8; font-size: 0.9em; line-height: 1.8; padding-left: 20px;">
+                        <li><strong>session_history.txt</strong> - All completed sessions with detailed records</li>
+                        <li><strong>stats.txt</strong> - Financial summary and live mirror statistics</li>
+                        <li><strong>game_stats.txt</strong> - Win/loss tracking for Sportsbook, Craps, and Poker</li>
+                    </ul>
+                </div>
+                
+                <button id="export-now-btn" class="btn" style="width: 100%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); font-size: 1.1em; padding: 15px;">
+                    📁 Export Data Now
+                </button>
+                
+                <div style="margin-top: 15px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-radius: 8px; font-size: 0.85em; color: #fbbf24;">
+                    💡 <strong>Tip:</strong> In Chrome/Edge, you can choose a folder location. In other browsers, files will download to your Downloads folder.
+                </div>
             </div>
         </div>
     </div>
@@ -747,6 +1232,8 @@
 
     <!-- Bottom Left Logo Sidebar -->
     <div class="logo-sidebar">
+        <a class="logo-simulator" id="logo-simulator" aria-label="Mode Selector" href="#simulator-panel" style="margin-bottom: 12px;">🎮</a>
+        <a class="logo-export" id="logo-export" aria-label="Export Data" href="#export-panel" style="margin-bottom: 12px;">📁</a>
         <a class="logo-coffee" aria-label="Support the game" href="#donation-panel">☕</a>
         <div class="logo-container">
             <div class="logo">♠️</div>

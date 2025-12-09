@@ -1,0 +1,18 @@
+# Essential dependencies (required for backend to run)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Optional dependencies (for advanced features - install separately if needed)
+# numpy==1.24.3
+# pydantic==2.5.0
+# nfl_data_py>=0.3.0  # Latest version is 0.3.3, not 1.0.0
+# hockey_scraper==1.4.0
+# pandas==2.1.0
+# scikit-learn==1.3.0
+
+# Note: xgboost and tensorflow are heavy dependencies
+# Install separately for NBA brain in its own venv:
+# xgboost==2.0.0
+# tensorflow==2.13.0

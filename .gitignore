@@ -4,6 +4,7 @@
 *.p12
 *.env
 .env*
+!\.env.example
 *.secret
 *.credentials
 *api-key*
