@@ -932,14 +932,22 @@
     </div>
     </main>
 
-    <!-- Guide Overlay -->
-    <div id="guide-overlay" class="guide-overlay" style="display: none;">
+    <!-- The Coach (Bottom Right Overlay) -->
+    <div id="the-coach" class="guide-overlay" style="display: none;">
         <div class="guide-overlay-header">
-            <h3>🚀 Next Step</h3>
-            <button id="close-guide-overlay" class="btn-icon">×</button>
+            <h3>🎓 The Coach</h3>
+            <button id="close-coach-overlay" class="btn-icon">×</button>
         </div>
-        <div id="overlay-rec-text">Loading recommendation...</div>
-        <button id="overlay-action-btn" class="btn btn-small">Go</button>
+        <div id="coach-status" class="coach-status" style="padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; margin-bottom: 8px; font-size: 0.85em;">
+            <div style="color: #94a3b8;">Waiting for session data...</div>
+        </div>
+        <div id="coach-recommendation" class="coach-recommendation" style="padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 6px; border-left: 3px solid #fbbf24; margin-bottom: 8px;">
+            <div style="color: #fbbf24; font-weight: bold; margin-bottom: 4px; font-size: 0.85em;">Recommendation</div>
+            <div id="coach-recommendation-text" style="color: #cbd5e1; font-size: 0.8em; line-height: 1.4;">Start playing to get recommendations.</div>
+        </div>
+        <div id="coach-reason" class="coach-reason" style="padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; font-size: 0.75em; color: #94a3b8; line-height: 1.3;">
+            <div id="coach-reason-text">The Coach monitors your play patterns and account health.</div>
+        </div>
     </div>
 
     <!-- Profile Stats Modal -->
@@ -984,8 +992,9 @@
             <div style="margin-bottom: 20px;">
                 <label style="display: block; color: #cbd5e1; margin-bottom: 8px;">Source</label>
                 <select id="add-funds-source" style="width: 100%; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                    <option value="credit-card">Credit Card (Clean - Better Odds)</option>
+                    <option value="gift-card">Gift Card (Needs Washing)</option>
                     <option value="bonus-match">Bonus Match</option>
-                    <option value="gift-card">Gift Card</option>
                     <option value="direct-deposit">Direct Deposit</option>
                     <option value="transfer">Transfer from Other Site</option>
                     <option value="other">Other</option>
@@ -1130,23 +1139,7 @@
                     </div>
                 </div>
                 
-                <!-- The Coach (Only visible in LIVE MIRROR mode) -->
-                <div id="the-coach" class="the-coach" style="display: none; margin-top: 20px; padding: 15px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 2px solid rgba(251, 191, 36, 0.3);">
-                    <div class="coach-header" style="margin-bottom: 12px;">
-                        <h4 style="color: #fbbf24; font-size: 1em; margin: 0;">🎓 The Coach</h4>
                     </div>
-                    <div id="coach-status" class="coach-status" style="padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; margin-bottom: 8px; font-size: 0.85em;">
-                        <div style="color: #94a3b8;">Waiting for session data...</div>
-                    </div>
-                    <div id="coach-recommendation" class="coach-recommendation" style="padding: 10px; background: rgba(251, 191, 36, 0.1); border-radius: 6px; border-left: 3px solid #fbbf24; margin-bottom: 8px;">
-                        <div style="color: #fbbf24; font-weight: bold; margin-bottom: 4px; font-size: 0.85em;">Recommendation</div>
-                        <div id="coach-recommendation-text" style="color: #cbd5e1; font-size: 0.8em; line-height: 1.4;">Start playing to get recommendations.</div>
-                    </div>
-                    <div id="coach-reason" class="coach-reason" style="padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; font-size: 0.75em; color: #94a3b8; line-height: 1.3;">
-                        <div id="coach-reason-text">The Coach monitors your play patterns and account health.</div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 

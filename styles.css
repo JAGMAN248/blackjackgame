@@ -204,23 +204,44 @@ body > * {
     padding: 10px 8px;
     background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
     color: white;
-    border: 2px solid #718096;
-    border-radius: 8px;
+    border: 2px solid rgba(113, 128, 150, 0.5);
+    border-radius: 10px;
     cursor: pointer;
     font-weight: bold;
     font-size: 1em;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.card-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transition: left 0.4s;
+}
+
+.card-btn:hover::before {
+    left: 100%;
 }
 
 .card-btn:hover {
     background: linear-gradient(135deg, #5a6578 0%, #3d4758 100%);
-    border-color: #8b9bb6;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    border-color: rgba(139, 155, 182, 0.7);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .card-btn:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .card-history-section {
@@ -352,16 +373,41 @@ body > * {
     font-size: 0.9em;
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
-    border: none;
-    border-radius: 8px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-small::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.4s;
+}
+
+.btn-small:hover::before {
+    left: 100%;
 }
 
 .btn-small:hover {
     background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-small:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
 }
 
 .sidebar-container {
@@ -848,70 +894,157 @@ header h1 {
     font-size: 1.1em;
     font-weight: bold;
     border: none;
-    border-radius: 10px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-transform: uppercase;
     letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn:hover:not(:disabled)::before {
+    left: 100%;
 }
 
 .btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
 }
 
 .btn:active:not(:disabled) {
-    transform: translateY(0);
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+    transition: all 0.1s ease;
 }
 
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
 .btn-recommended {
     background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
     color: white;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-recommended:hover:not(:disabled) {
+    background: linear-gradient(135deg, #9d6af7 0%, #8c4aee 100%);
+    box-shadow: 0 10px 30px -5px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-bet {
     background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
     color: #1f2937;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(34, 197, 94, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-bet:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5aee90 0%, #32d56e 100%);
+    box-shadow: 0 10px 30px -5px rgba(34, 197, 94, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-hit {
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-hit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4b92f7 0%, #3573ec 100%);
+    box-shadow: 0 10px 30px -5px rgba(37, 99, 235, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-double {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(217, 119, 6, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-double:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f5ae1b 0%, #e98716 100%);
+    box-shadow: 0 10px 30px -5px rgba(217, 119, 6, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-split {
     background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
     color: white;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-split:hover:not(:disabled) {
+    background: linear-gradient(135deg, #9d6af7 0%, #8c4aee 100%);
+    box-shadow: 0 10px 30px -5px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-insurance {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(5, 150, 105, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-insurance:hover:not(:disabled) {
+    background: linear-gradient(135deg, #20c991 0%, #15a679 100%);
+    box-shadow: 0 10px 30px -5px rgba(5, 150, 105, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-surrender {
     background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
     color: white;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(75, 85, 99, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-surrender:hover:not(:disabled) {
+    background: linear-gradient(135deg, #7b8290 0%, #5b6573 100%);
+    box-shadow: 0 10px 30px -5px rgba(75, 85, 99, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-stand {
     background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
     color: white;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(219, 39, 119, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-stand:hover:not(:disabled) {
+    background: linear-gradient(135deg, #fc58a9 0%, #eb3787 100%);
+    box-shadow: 0 10px 30px -5px rgba(219, 39, 119, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-new-game {
     background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
     color: white;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-new-game:hover:not(:disabled) {
+    background: linear-gradient(135deg, #9d6af7 0%, #8c4aee 100%);
+    box-shadow: 0 10px 30px -5px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .message {
@@ -1180,19 +1313,43 @@ header h1 {
     display: inline-block;
     text-align: center;
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: 12px;
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: #fff;
     font-weight: 700;
     text-decoration: none;
-    transition: all 0.2s ease;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-buy-coffee::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-buy-coffee:hover::before {
+    left: 100%;
 }
 
 .btn-buy-coffee:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(217, 119, 6, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-buy-coffee:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
 }
 
 .card-pad-button {
@@ -1606,32 +1763,57 @@ body > .simulator-sidebar {
 }
 
 .tab-btn {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: #cbd5e1;
     padding: 12px 20px;
-    border-radius: 10px;
+    border-radius: 12px;
     cursor: pointer !important;
     font-size: 1em;
     font-weight: 600;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(5px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     pointer-events: auto !important;
     position: relative;
     z-index: 2002 !important;
     user-select: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.tab-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s;
+}
+
+.tab-btn:hover::before {
+    left: 100%;
 }
 
 .tab-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 .tab-btn.active {
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
     border-color: #60a5fa;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.tab-btn.active::before {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
 }
 
 .tab-content {
@@ -1847,23 +2029,44 @@ body > .simulator-sidebar {
     padding: 15px 30px;
     font-size: 1.1em;
     font-weight: bold;
-    border: none;
-    border-radius: 10px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-top: 10px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 14px 0 rgba(217, 119, 6, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.btn-donate::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-donate:hover::before {
+    left: 100%;
 }
 
 .btn-donate:hover {
     background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(245, 158, 11, 0.4);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-donate:active {
-    transform: translateY(0);
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 2px 8px -2px rgba(217, 119, 6, 0.3);
 }
 
 .donation-message {

@@ -70,11 +70,20 @@ The app is designed to launch **immediately** with zero setup:
 - 📊 Monte Carlo simulation
 - 🎲 Range analysis
 
-### Live Session Tracking
-- 💰 Bankroll management
-- 📊 Win/loss tracking
-- 🎯 Session analytics
+### Live Session Tracking (Casino Night)
+- 💰 Bankroll management with clean/dirty money tracking
+- 📊 Win/loss tracking across all games
+- 🎯 Session analytics and washing progress
 - 📁 Export data to files
+- 🧠 AI Coach for strategic recommendations
+- 🏦 Heads-up display (HUD) for active sessions
+
+### Risk Analysis System
+- 🧮 Monte Carlo simulations (10,000 runs)
+- 📊 Risk of Ruin calculations
+- 💵 Kelly Criterion optimal bet sizing
+- 🤖 AI-powered strategic advice (optional)
+- ⚠️ Real-time risk warnings
 
 ## 🏈 Sports Handicapping Integration
 
@@ -109,132 +118,21 @@ blackjack/
 ├── index.html              # Main UI
 ├── script.js               # Frontend logic
 ├── styles.css              # Styling
+├── sessionManager.js       # Session tracking
 ├── backend_api.py          # FastAPI backend
 ├── requirements.txt        # Python dependencies
 ├── .env                    # API keys (gitignored)
 ├── .env.example            # API key template
 └── backend/
-    ├── nfl_brain/          # Clone mattleonard16/nflalgorithm here
-    ├── nba_brain/          # Clone kyleskom/NBA-Machine-Learning-Sports-Betting here
-    └── nhl_brain/          # Clone justinjjlee/NHL-Analytics here
+    ├── ai_wrapper.py       # AI reasoning engine
+    ├── risk_engine.py      # Risk analysis (NumPy)
+    └── brains/
+        ├── nfl/            # NFL analysis engine
+        ├── nhl/            # NHL analysis engine
+        └── nba/            # NBA analysis engine (future)
 ```
 
-## 🔧 Backend API Endpoints
-
-### POST `/api/scan-ev-bets`
-Scans sportsbooks for +EV bets.
-
-**Request:**
-```json
-{
-  "bankroll": 1000.0,
-  "sport": "basketball_nba"
-}
-```
-
-**Response:**
-```json
-{
-  "bets": [
-    {
-      "event": "Lakers vs Warriors",
-      "market": "Moneyline",
-      "selection": "Lakers",
-      "odds": 2.10,
-      "ev": 3.5,
-      "kellyFraction": 0.025,
-      "sportsbook": "DraftKings",
-      "team_abbr": "LAL",
-      "opponent_abbr": "GSW",
-      "sport": "basketball_nba"
-    }
-  ],
-  "timestamp": "2024-01-01T12:00:00"
-}
-```
-
-### POST `/api/validate-bet`
-Validates a bet with handicapping models.
-
-**Request:**
-```json
-{
-  "team_abbr": "KC",
-  "opponent_abbr": "BUF",
-  "sport": "nfl"
-}
-```
-
-**Response:**
-```json
-{
-  "team": "KC",
-  "confidence_score": 75,
-  "market_signal": "Odds +150 (Fair Value +130)",
-  "model_signal": "EPA Rank #3 vs Defensive Rank #28",
-  "recommendation": "Strong Play. Bet $50.",
-  "kelly_bet": 0.025
-}
-```
-
-### POST `/api/calculate-equity`
-Calculates poker hand equity.
-
-**Request:**
-```json
-{
-  "holeCards": ["As", "Ks"],
-  "boardCards": ["Ah", "7d", "2c"],
-  "opponentRange": "random"
-}
-```
-
-### POST `/api/simulate-hand`
-Simulates blackjack hand EV.
-
-**Request:**
-```json
-{
-  "playerHand": ["10♠", "6♥"],
-  "dealerHand": ["7♦"],
-  "runningCount": 4,
-  "trueCount": 2.0
-}
-```
-
-## 🚀 Advanced Setup
-
-### Integrating Sports Brains
-
-1. **Clone repositories:**
-   ```bash
-   cd backend
-   git clone https://github.com/mattleonard16/nflalgorithm.git nfl_brain
-   git clone https://github.com/kyleskom/NBA-Machine-Learning-Sports-Betting.git nba_brain
-   git clone https://github.com/justinjjlee/NHL-Analytics.git nfl_brain
-   ```
-
-2. **Set up NBA Brain (separate venv):**
-   ```bash
-   cd nba_brain
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. **Update `backend_api.py`:**
-   - Modify endpoints to call actual brain scripts
-   - Convert output to JSON format
-   - Add caching for performance
-
-## 🔒 Security
-
-- **API Keys**: Stored in `.env` file (gitignored)
-- **Never commit**: `.env` file or any files with real keys
-- **Template**: Use `.env.example` as a guide
-- **Backend**: Loads keys from environment variables
-
-## 📊 Usage Examples
+## 🎮 Usage Examples
 
 ### Using Sportsbook Value Finder
 1. Go to **Sportsbook** tab
@@ -245,13 +143,76 @@ Simulates blackjack hand EV.
 
 **Note:** Without backend, you'll see mock/demo data. All features still work!
 
-### Using Live Session Tracking
-1. Go to **Health** tab
-2. Click **"Start New Session"**
-3. Select site and game type
-4. Record wins/losses as you play
-5. Click **"End Session"** to save stats
-6. Export data using **📁 Export** icon
+### Starting a Casino Night Session
+1. Click **"🏦 Start Casino Night"** button in header
+2. Enter:
+   - Starting Cash (Clean Money): e.g., $1,000
+   - Bonus Funds (Dirty Money): e.g., $200
+   - Washing Target: (auto: 2x bonus)
+3. Click **"Start Night"**
+4. HUD appears at bottom showing bankroll, wash progress, and risk level
+5. Play games - all results automatically log to session
+6. Click **"🔴 End Night"** to view summary and save session
+
+### Using Risk Analysis
+1. Play any game (Blackjack, Sportsbook, etc.)
+2. Click **"🧠 Ask Coach"** in HUD (if session active)
+3. View risk analysis with:
+   - Risk of Ruin percentage
+   - Optimal bet size (Kelly Criterion)
+   - AI strategic advice
+4. Adjust your strategy based on recommendations
+
+## 🎲 Game Rules
+
+### Blackjack
+- **Objective**: Get as close to 21 as possible without going over
+- **Card Values**: Number cards = face value, Face cards = 10, Ace = 1 or 11
+- **Dealer Rules**: Must hit on 16 or less, stand on 17 or more
+- **Blackjack**: 21 with first two cards pays 2:1
+
+### Craps (Pass Line + Odds Strategy)
+1. Place Pass Line bet before come-out roll
+2. If point is established (4, 5, 6, 8, 9, 10), place Odds bet
+3. Odds bet has 0% house edge (best bet in casino)
+4. House edge: 1.41% (Pass Line only), 0.85% (with 1x Odds), 0.61% (with 2x Odds)
+
+## 🔧 Backend API Endpoints
+
+### POST `/api/scan-ev-bets`
+Scans sportsbooks for +EV bets.
+
+### POST `/api/validate-bet`
+Validates a bet with handicapping models.
+
+### POST `/api/analyze-session`
+Analyzes session risk with Monte Carlo simulation and AI advice.
+
+### POST `/api/suggest-next-move`
+AI Coach recommendation based on current session state.
+
+### POST `/api/calculate-equity`
+Calculates poker hand equity.
+
+### POST `/api/simulate-hand`
+Simulates blackjack hand EV.
+
+See `SETUP.md` for detailed API documentation.
+
+## 🔒 Security
+
+- **API Keys**: Stored in `.env` file (gitignored)
+- **Never commit**: `.env` file or any files with real keys
+- **Template**: Use `.env.example` as a guide
+- **Backend**: Loads keys from environment variables
+
+## 📚 External Integrations
+
+- **EV Betting**: `jbram22/ev_sports_betting`
+- **Poker Equity**: `rundef/node-poker-odds-calculator`
+- **Blackjack Sim**: `mhluska/blackjack-simulator`
+- **NFL Data**: `nflverse/nfl_data_py`
+- **NHL Scraper**: `HarryShomer/Hockey-Scraper`
 
 ## 🐛 Troubleshooting
 
@@ -269,27 +230,7 @@ Simulates blackjack hand EV.
 - Check key is valid at https://the-odds-api.com/
 - Restart backend server after changing `.env`
 
-## 📚 External Integrations
-
-- **EV Betting**: `jbram22/ev_sports_betting`
-- **Poker Equity**: `rundef/node-poker-odds-calculator`
-- **Blackjack Sim**: `mhluska/blackjack-simulator`
-- **NFL Data**: `nflverse/nfl_data_py`
-- **NHL Scraper**: `HarryShomer/Hockey-Scraper`
-
-## 🎲 Game Rules
-
-- **Objective**: Get as close to 21 as possible without going over
-- **Card Values**: Number cards = face value, Face cards = 10, Ace = 1 or 11
-- **Dealer Rules**: Must hit on 16 or less, stand on 17 or more
-- **Blackjack**: 21 with first two cards pays 2:1
-
-## 📝 Notes
-
-- **NBA Brain**: Uses TensorFlow - run in separate venv to avoid conflicts
-- **NFL Brain**: Cache weekly predictions (they don't change during the week)
-- **NHL Brain**: Update metrics daily via GitHub Actions or local cron
-- **All Brains**: Use Redis for caching predictions during active use
+For more detailed setup, troubleshooting, and technical information, see `SETUP.md`.
 
 ---
 

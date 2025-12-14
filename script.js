@@ -3306,32 +3306,40 @@ async function exportDataToFilesWithStatus() {
     }
 }
 
-// Donation panel toggle
-if (coffeeBtnEl && donationSidebarEl) {
-    donationSidebarEl.style.display = 'none';
-    coffeeBtnEl.addEventListener('click', (e) => {
+// Donation panel toggle - initialize in DOMContentLoaded
+function initDonationSidebar() {
+    const donationSidebar = document.querySelector('.donation-sidebar');
+    const coffeeBtn = document.getElementById('logo-coffee') || document.querySelector('.logo-coffee');
+    
+    if (coffeeBtn && donationSidebar) {
+        donationSidebar.style.display = 'none';
+        coffeeBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        const isHidden = donationSidebarEl.style.display === 'none';
-        // Close other sidebars if open
-        if (simulatorSidebarEl) {
-            simulatorSidebarEl.style.display = 'none';
-            simulatorSidebarEl.classList.remove('active');
-        }
-        if (exportSidebarEl) {
-            exportSidebarEl.style.display = 'none';
-            exportSidebarEl.classList.remove('active');
-        }
-        donationSidebarEl.style.display = isHidden ? 'flex' : 'none';
-        if (isHidden) {
-            donationSidebarEl.classList.add('active');
-            const panel = document.getElementById('donation-panel');
-            if (panel) {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            e.stopPropagation();
+            const isHidden = donationSidebar.style.display === 'none' || !donationSidebar.classList.contains('active');
+            
+            // Close other sidebars
+            const simulatorSidebar = document.querySelector('.simulator-sidebar');
+            const exportSidebar = document.querySelector('.export-sidebar');
+            if (simulatorSidebar) {
+                simulatorSidebar.style.display = 'none';
+                simulatorSidebar.classList.remove('active');
             }
+            if (exportSidebar) {
+                exportSidebar.style.display = 'none';
+                exportSidebar.classList.remove('active');
+            }
+            
+            // Toggle donation sidebar
+        if (isHidden) {
+                donationSidebar.style.display = 'flex';
+                donationSidebar.classList.add('active');
         } else {
-            donationSidebarEl.classList.remove('active');
+                donationSidebar.style.display = 'none';
+                donationSidebar.classList.remove('active');
         }
     });
+    }
 }
 
 // Donation form handling
@@ -3476,6 +3484,7 @@ let sessionStats = {
     freeSpinWinnings: 0, // Track winnings from free spins separately
     cashPlayed: 0, // Track cash play separately from free spins
     lastDepositDate: null, // Track when last deposit was made
+    depositMethods: [], // Array of {amount, method, timestamp} - tracks how deposits were made
     // New wallet system
     walletEntries: [], // Array of {amount, source, id}
     plannedActivities: [], // Array of {game, amount, risk, id}
@@ -3491,7 +3500,12 @@ let sessionStats = {
 function loadUserProfile(username) {
     const data = localStorage.getItem(`bj_user_${username}`);
     if (data) {
-        return JSON.parse(data);
+        const profile = JSON.parse(data);
+        // Ensure depositMethods exists for backward compatibility
+        if (!profile.depositMethods) {
+            profile.depositMethods = [];
+        }
+        return profile;
     } else {
         // Default / New Profile - only create if it doesn't exist
         const newProfile = {
@@ -3499,7 +3513,8 @@ function loadUserProfile(username) {
             deposit: 0,
             casinoPlayed: 0,
             sportsPlayed: 0,
-            withdrawn: 0
+            withdrawn: 0,
+            depositMethods: [] // Initialize deposit methods
         };
         
         // Pre-fill "Tyler" with transcription data if new
@@ -3508,6 +3523,7 @@ function loadUserProfile(username) {
             newProfile.casinoPlayed = 13329.70;
             newProfile.sportsPlayed = 344.35;
             newProfile.withdrawn = 1428.00; // Total withdrawn
+            newProfile.depositMethods = []; // Initialize deposit methods
         }
         
         // Save the new profile to localStorage so it persists on the computer
@@ -3530,7 +3546,7 @@ function saveUserProfile() {
     }
     
     localStorage.setItem(`bj_user_${currentUser.username}`, JSON.stringify(currentUser));
-    updateGuideRecommendation();
+    updateCoach();
 }
 
 function updateUIForLogin() {
@@ -3570,7 +3586,7 @@ function updateUIForLogin() {
         
         // Trigger updates
         updateHealth();
-        updateGuideRecommendation();
+        updateCoach();
     } else {
         userProfileDisplay.style.display = 'none';
         loginBtn.style.display = 'block';
@@ -3654,10 +3670,12 @@ if (profileCloseBtn) {
     });
 }
 
-// Event Listeners
-if (closeGuideOverlayBtn) {
-    closeGuideOverlayBtn.addEventListener('click', () => {
-        guideOverlay.style.display = 'none';
+// Event Listeners - Coach close button
+const closeCoachOverlayBtn = document.getElementById('close-coach-overlay');
+if (closeCoachOverlayBtn) {
+    closeCoachOverlayBtn.addEventListener('click', () => {
+        const theCoach = document.getElementById('the-coach');
+        if (theCoach) theCoach.style.display = 'none';
     });
 }
 
@@ -4754,8 +4772,37 @@ let sessionHistory = [];
 function updateHealthDashboard() {
     // Calculate totals from sessionStats
     const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
-    const cleanMoney = (sessionStats.casinoPlayed || 0) * 0.5; // Simplified: assume 50% is clean after play
-    const dirtyMoney = totalBankroll - cleanMoney;
+    
+    // Calculate clean money based on deposit methods
+    // Credit card deposits are already clean (better odds - no washing needed)
+    // Gift card and other deposits need washing through casino play
+    let cleanMoney = 0;
+    if (sessionStats.depositMethods && sessionStats.depositMethods.length > 0) {
+        // Sum credit card deposits (already clean - better odds)
+        const creditCardDeposits = sessionStats.depositMethods
+            .filter(d => d.method === 'credit-card')
+            .reduce((sum, d) => sum + (d.amount || 0), 0);
+        
+        // Sum non-credit-card deposits (need washing)
+        const nonCreditCardDeposits = sessionStats.depositMethods
+            .filter(d => d.method !== 'credit-card')
+            .reduce((sum, d) => sum + (d.amount || 0), 0);
+        
+        // Casino play washes non-credit-card deposits at 50% efficiency
+        // Credit card deposits are already 100% clean
+        const washedMoney = Math.min((sessionStats.casinoPlayed || 0) * 0.5, nonCreditCardDeposits);
+        
+        // Clean money = credit card deposits (100% clean) + washed money from other deposits
+        cleanMoney = creditCardDeposits + washedMoney;
+    } else {
+        // Fallback: assume 50% is clean after play (for backward compatibility)
+        cleanMoney = (sessionStats.casinoPlayed || 0) * 0.5;
+    }
+    
+    const dirtyMoney = Math.max(0, totalBankroll - cleanMoney);
+    
+    // Update coach after health dashboard updates
+    updateCoach();
     
     // Update dashboard display
     const totalBankrollEl = document.getElementById('dashboard-total-bankroll');
@@ -4826,9 +4873,33 @@ function initCheckInHandlers() {
             const source = document.getElementById('add-funds-source')?.value || 'other';
             
             if (amount > 0) {
+                // Track deposit method
+                if (!sessionStats.depositMethods) {
+                    sessionStats.depositMethods = [];
+                }
+                sessionStats.depositMethods.push({
+                    amount: amount,
+                    method: source,
+                    timestamp: new Date().toISOString()
+                });
+                
                 sessionStats.deposit = (sessionStats.deposit || 0) + amount;
+                
+                // Note: Credit card deposits are tracked as clean money in depositMethods
+                // They don't need washing (better odds), but we don't add to casinoPlayed
+                // until they're actually played. The clean money calculation handles this.
+                
+                // Update balance in blackjack page
+                balance = (balance || 0) + amount;
+                if (liveMode) {
+                    liveMirrorBalance = (liveMirrorBalance || 0) + amount;
+                }
                 if (addFundsModal) addFundsModal.style.display = 'none';
-                updateHealthDashboard();
+                
+                // Update all displays in correct order
+                // updateHealthDashboard() calls updateCoach() internally, so we don't need to call it twice
+                updateHealthDashboard(); // Updates health tab AND coach (coach is called inside)
+                updateUI(); // Update blackjack balance display
                 if (currentUser) saveUserProfile();
             }
         });
@@ -4852,8 +4923,15 @@ function initCheckInHandlers() {
             
             if (amount > 0) {
                 sessionStats.withdrawn = (sessionStats.withdrawn || 0) + amount;
+                // Update balance in blackjack page
+                balance = Math.max(0, (balance || 0) - amount);
+                if (liveMode) {
+                    liveMirrorBalance = Math.max(0, (liveMirrorBalance || 0) - amount);
+                }
                 if (withdrawModal) withdrawModal.style.display = 'none';
                 updateHealthDashboard();
+                updateUI(); // Update blackjack balance display
+                updateCoach(); // Update coach with new balance
                 if (currentUser) saveUserProfile();
             }
         });
@@ -5321,6 +5399,7 @@ function recordGameWin(gameType, amount) {
     
     updateGameStatsDisplay(gameType);
     updateHealthDashboard();
+    updateCoach(); // Update coach when game wins recorded
     if (currentUser) saveUserProfile();
 }
 
@@ -5344,6 +5423,7 @@ function recordGameLoss(gameType, amount) {
     
     updateGameStatsDisplay(gameType);
     updateHealthDashboard();
+    updateCoach(); // Update coach when game losses recorded
     if (currentUser) saveUserProfile();
 }
 
@@ -6333,8 +6413,11 @@ function initLiveModeToggle() {
                 const sliderText = document.querySelector('.live-switch .slider-text');
                 if (sliderText) sliderText.textContent = 'SIM';
                 if (resultLogging) resultLogging.style.display = 'none';
-                if (theCoach) theCoach.style.display = 'none';
             }
+            
+            // Update coach when mode changes
+            updateCoach();
+            updateHealthDashboard();
         });
     }
     
@@ -6348,15 +6431,32 @@ function initLiveModeToggle() {
             if (syncBalance > 0) {
                 liveMirrorBalance = syncBalance;
                 balance = syncBalance; // Sync the game balance
+                
+                // Update sessionStats.deposit to match synced balance
+                // This ensures health dashboard and coach show the correct balance
+                // Calculate what deposit should be to match the balance
+                const currentTotalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+                const balanceDifference = syncBalance - currentTotalBankroll;
+                
+                // If balance is higher, add to deposit; if lower, adjust accordingly
+                if (balanceDifference > 0) {
+                    // Balance is higher - add difference to deposit
+                    sessionStats.deposit = (sessionStats.deposit || 0) + balanceDifference;
+                } else if (balanceDifference < 0) {
+                    // Balance is lower - could be due to withdrawals or losses
+                    // Adjust deposit to match (but don't go negative)
+                    sessionStats.deposit = Math.max(0, (sessionStats.deposit || 0) + balanceDifference);
+                }
+                
                 liveMirrorStats.sessionStartTime = new Date();
                 liveMirrorStats.handHistory = [];
                 
                 if (liveSyncModal) liveSyncModal.style.display = 'none';
                 if (resultLogging) resultLogging.style.display = 'block';
-                if (theCoach) theCoach.style.display = 'block';
                 
-                updateUI();
-                updateCoach();
+                // Update all displays - updateHealthDashboard() calls updateCoach() internally
+                updateHealthDashboard(); // Updates health tab total bankroll AND coach
+                updateUI(); // Updates blackjack balance display
                 showMessage('LIVE MIRROR mode activated. Balance synced.', 'win');
             }
         });
@@ -6458,14 +6558,76 @@ function logHandResult(result) {
 
 // The Coach - Real-time Financial Advisor
 function updateCoach() {
-    if (!liveMode) return;
-    
+    const coachEl = document.getElementById('the-coach');
     const coachStatus = document.getElementById('coach-status');
     const coachRecommendation = document.getElementById('coach-recommendation');
     const coachRecommendationText = document.getElementById('coach-recommendation-text');
     const coachReason = document.getElementById('coach-reason-text');
     
-    if (!coachStatus || !coachRecommendationText || !coachReason) return;
+    if (!coachEl || !coachStatus || !coachRecommendationText || !coachReason) return;
+    
+    // Show coach overlay (replaces guide overlay)
+    coachEl.style.display = 'flex';
+    
+    // STEP 1: If not in live mirror mode, recommend switching
+    if (!liveMode) {
+        // Use total bankroll calculation for consistency
+        const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+        const displayBalance = totalBankroll || balance || 0;
+        let statusHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Mode:</span>
+                <span style="color: #60a5fa; font-weight: bold;">⚪ SIMULATOR</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Balance:</span>
+                <span style="color: #60a5fa; font-weight: bold;">$${displayBalance.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #94a3b8;">Status:</span>
+                <span style="color: #fbbf24; font-weight: bold;">Practice Mode</span>
+            </div>
+        `;
+        coachStatus.innerHTML = statusHTML;
+        
+        coachRecommendationText.innerHTML = '<strong>🔴 Step 1: Switch to Live Mirror Mode</strong>';
+        coachRecommendation.style.borderLeftColor = '#ef4444';
+        coachRecommendation.style.background = 'rgba(239, 68, 68, 0.1)';
+        coachReason.textContent = 'Enable Live Mirror Mode to track real money. Toggle the switch in the Blackjack tab to get started.';
+        return;
+    }
+    
+    // STEP 2: If in live mirror mode but no deposit, recommend adding funds
+    const deposit = sessionStats.deposit || 0;
+    if (deposit <= 0) {
+        // Use total bankroll calculation for consistency
+        const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+        const currentBalance = totalBankroll || liveMirrorBalance || balance || 0;
+        
+        let statusHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Mode:</span>
+                <span style="color: #ef4444; font-weight: bold;">🔴 LIVE MIRROR</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #94a3b8;">Balance:</span>
+                <span style="color: #60a5fa; font-weight: bold;">$${currentBalance.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #94a3b8;">Deposit:</span>
+                <span style="color: #f87171; font-weight: bold;">$0.00</span>
+            </div>
+        `;
+        coachStatus.innerHTML = statusHTML;
+        
+        coachRecommendationText.innerHTML = '<strong>💰 Step 2: Add Funds in Health Tab</strong>';
+        coachRecommendation.style.borderLeftColor = '#22c55e';
+        coachRecommendation.style.background = 'rgba(34, 197, 94, 0.1)';
+        coachReason.textContent = 'Go to Health tab → Check-In section → Click "Add Funds" to deposit money. Credit Card deposits give better odds (clean money).';
+        return;
+    }
+    
+    // STEP 3+: Active session - show live stats and recommendations
     
     const stats = liveMirrorStats;
     const handsPlayed = stats.handsPlayed;
@@ -6483,8 +6645,16 @@ function updateCoach() {
     const perfectStrategyRatio = handsPlayed > 0 ? (stats.perfectStrategyCount / handsPlayed) : 0;
     const isBotLike = perfectStrategyRatio > 0.95 && handsPlayed > 20;
     
-    // Update Status
+    // Get consistent balance - use total bankroll calculation to match health dashboard
+    const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
+    const currentBalance = totalBankroll || liveMirrorBalance || balance || 0;
+    
+    // Update Status with consistent balance
     let statusHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #94a3b8;">Balance:</span>
+            <span style="color: #60a5fa; font-weight: bold;">$${currentBalance.toFixed(2)}</span>
+        </div>
         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
             <span style="color: #94a3b8;">Hands Played:</span>
             <span style="color: #60a5fa; font-weight: bold;">${handsPlayed}</span>
@@ -6563,6 +6733,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize tabs first
     initTabs();
     
+    // Initialize donation sidebar
+    initDonationSidebar();
+    
     // Auto-login Tyler
     currentUser = loadUserProfile("Tyler");
     updateUIForLogin();
@@ -6576,6 +6749,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Live Mirror Mode
     initLiveModeToggle();
     initResultLogging();
+    
+    // Show coach on initial load
+    updateCoach();
     
     // Initialize Sportsbook Money Flow
     initSportsbookMoneyFlow();
