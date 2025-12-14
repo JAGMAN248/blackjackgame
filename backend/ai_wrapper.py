@@ -328,6 +328,126 @@ RESPONSE:"""
             print(f"⚠️ Error generating AI response: {e}")
             return self._fallback_reasoning(context, math_data)
     
+    def get_nfl_betting_advice(self, prediction_data: Dict) -> str:
+        """
+        Get betting advice from Ollama based on NFL prediction results.
+        
+        Args:
+            prediction_data: Dict with:
+                - predicted_win_probability: float (0-1)
+                - odds: float (decimal odds)
+                - confidence: str
+                - recommendation: str
+                - mechanics_insights: Dict
+                - parley_bets: List of bet dicts
+        
+        Returns:
+            str: Ollama betting advice
+        """
+        if not self.initialized:
+            return self._fallback_nfl_advice(prediction_data)
+        
+        try:
+            win_prob = prediction_data.get('predicted_win_probability', 0.5)
+            odds = prediction_data.get('odds', 2.0)
+            confidence = prediction_data.get('confidence', 'Moderate')
+            recommendation = prediction_data.get('recommendation', 'MODERATE_PLAY')
+            mechanics = prediction_data.get('mechanics_insights', {})
+            parley_bets = prediction_data.get('parley_bets', [])
+            
+            # Calculate EV
+            ev = (win_prob * (odds - 1)) - (1 - win_prob)
+            kelly_fraction = (win_prob * odds - 1) / (odds - 1) if odds > 1 else 0
+            
+            # Build context from mechanics
+            mechanics_summary = ""
+            if mechanics:
+                if 'qb_clutch_factor' in mechanics:
+                    mechanics_summary += f"QB Clutch Factor: {mechanics['qb_clutch_factor']:.2f}. "
+                if 'qb_red_zone_efficiency' in mechanics:
+                    mechanics_summary += f"Red Zone Efficiency: {mechanics['qb_red_zone_efficiency']:.2f}. "
+            
+            prompt = f"""You are a professional sports betting analyst specializing in NFL parleys.
+
+PREDICTION ANALYSIS:
+- Predicted Win Probability: {win_prob:.1%}
+- Bookmaker Odds: {odds:.2f} (decimal)
+- Expected Value (EV): {ev:+.2%}
+- Kelly Criterion: {kelly_fraction:.1%} of bankroll
+- Confidence Level: {confidence}
+- Model Recommendation: {recommendation}
+
+KEY MECHANICS:
+{mechanics_summary if mechanics_summary else "Standard metrics"}
+
+PARLEY DETAILS:
+- Number of legs: {len(parley_bets)}
+- Combined odds: {odds:.2f}
+
+TASK:
+Provide actionable betting advice:
+1. Should this parley be placed? (Yes/No/Maybe)
+2. What bet size is appropriate? (Use Kelly Criterion: {kelly_fraction:.1%})
+3. What are the key risks?
+4. Any alternative strategies?
+
+Be concise and actionable (max 4 sentences).
+
+RESPONSE:"""
+            
+            # Use Ollama if available
+            if self.use_ollama and self.ollama_model:
+                try:
+                    response = requests.post(
+                        f"{self.ollama_base_url}/api/generate",
+                        json={
+                            "model": self.ollama_model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.2,
+                                "num_predict": 200
+                            }
+                        },
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        response_text = result.get('response', '').strip()
+                        
+                        # Extract just the response part
+                        if "RESPONSE:" in response_text:
+                            response_text = response_text.split("RESPONSE:")[-1].strip()
+                        
+                        return response_text
+                    else:
+                        raise Exception(f"Ollama API error: {response.status_code}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Ollama request error: {e}")
+                    return self._fallback_nfl_advice(prediction_data)
+            
+            # Fallback
+            return self._fallback_nfl_advice(prediction_data)
+            
+        except Exception as e:
+            print(f"⚠️ Error generating NFL betting advice: {e}")
+            return self._fallback_nfl_advice(prediction_data)
+    
+    def _fallback_nfl_advice(self, prediction_data: Dict) -> str:
+        """Fallback NFL betting advice when Ollama unavailable"""
+        win_prob = prediction_data.get('predicted_win_probability', 0.5)
+        odds = prediction_data.get('odds', 2.0)
+        ev = (win_prob * (odds - 1)) - (1 - win_prob)
+        
+        if ev > 0.1:
+            return f"✅ STRONG PLAY: {win_prob:.1%} win probability with {ev:+.1%} EV. Positive value bet."
+        elif ev > 0:
+            return f"✅ MODERATE PLAY: {win_prob:.1%} win probability with {ev:+.1%} EV. Small positive value."
+        else:
+            return f"❌ FADE: {win_prob:.1%} win probability with {ev:.1%} EV. Negative value - avoid this bet."
+    
     def suggest_next_move(self, washing_status, game_profiles):
         """
         Suggest the best game/strategy based on washing progress.

@@ -26,13 +26,13 @@ except ImportError:
     PYTORCH_AVAILABLE = False
     print("⚠️ PyTorch not available. NFL parley predictor disabled.")
 
-# Try to import NFL data library
+# Try to import NFL data library (nflverse via nflreadpy)
 try:
-    import nfl_data_py as nfl
+    import nflreadpy as nfl
     NFL_DATA_AVAILABLE = True
 except ImportError:
     NFL_DATA_AVAILABLE = False
-    print("⚠️ nfl_data_py not available. Install: pip install nfl-data-py")
+    print("⚠️ nflreadpy not available. Install: pip install nflreadpy")
 
 
 class PlayerMechanicsExtractor:
@@ -355,41 +355,214 @@ class NFLDataFetcher:
         self.extractor = PlayerMechanicsExtractor()
         self.data_cache = {}
     
-    def fetch_team_data(self, team_abbr: str, year: int = None) -> Dict:
-        """Fetch team data from nfl_data_py"""
+    def fetch_team_data(self, team_abbr: str, year: int = 2025) -> Dict:
+        """Fetch team data from nflverse (nflreadpy) for 2025 season"""
         if not NFL_DATA_AVAILABLE:
             return self._mock_team_data(team_abbr)
         
         if year is None:
-            year = datetime.now().year
+            year = 2025  # Default to 2025 season
         
         try:
-            # Fetch seasonal data
-            df = nfl.import_seasonal_data([year])
-            team_data = df[df['team'] == team_abbr.upper()]
+            # Fetch play-by-play data for 2025 season
+            pbp_data = nfl.load_pbp(seasons=[year])
             
-            if team_data.empty:
+            # Filter for team
+            team_pbp = pbp_data[pbp_data['posteam'] == team_abbr.upper()]
+            
+            if team_pbp.empty:
+                # Try defensive stats
+                team_pbp = pbp_data[pbp_data['defteam'] == team_abbr.upper()]
+            
+            if team_pbp.empty:
                 return self._mock_team_data(team_abbr)
             
-            # Extract team metrics
+            # Calculate EPA metrics
+            offensive_epa = team_pbp[team_pbp['posteam'] == team_abbr.upper()]['epa'].mean() if not team_pbp[team_pbp['posteam'] == team_abbr.upper()].empty else 0.0
+            defensive_epa = -team_pbp[team_pbp['defteam'] == team_abbr.upper()]['epa'].mean() if not team_pbp[team_pbp['defteam'] == team_abbr.upper()].empty else 0.0
+            
+            # Fetch team stats
+            team_stats = nfl.load_team_stats(seasons=[year])
+            team_row = team_stats[team_stats['team'] == team_abbr.upper()]
+            
+            # Calculate additional metrics
+            sack_rate = 0.0
+            if not team_row.empty and 'sacks' in team_row.columns and 'dropbacks' in team_row.columns:
+                sacks = team_row['sacks'].iloc[0] if 'sacks' in team_row.columns else 0
+                dropbacks = team_row['dropbacks'].iloc[0] if 'dropbacks' in team_row.columns else 1
+                sack_rate = sacks / max(dropbacks, 1)
+            
             return {
-                'epa_offense': float(team_data.get('epa_per_play', [0.0])[0] if hasattr(team_data, 'get') else 0.0),
-                'epa_defense': float(team_data.get('def_epa_per_play', [0.0])[0] if hasattr(team_data, 'get') else 0.0),
-                'epa_rank': int(team_data.get('epa_rank', [15])[0] if hasattr(team_data, 'get') else 15),
-                # Add more metrics as available
+                'epa_offense': float(offensive_epa) if not np.isnan(offensive_epa) else 0.08,
+                'epa_defense': float(defensive_epa) if not np.isnan(defensive_epa) else 0.05,
+                'epa_rank': int(team_row['epa_rank'].iloc[0]) if not team_row.empty and 'epa_rank' in team_row.columns else 15,
+                'sack_rate': float(sack_rate),
+                'qb_wr_connection': 0.7,  # Calculate from completion rates if available
+                'special_teams_epa': 0.0,  # Can be calculated from special teams plays
+                'coaching_efficiency': 0.6,  # Can be calculated from timeout usage, challenges
+                'injury_impact_score': 0.1,  # Would need injury data
+                'recent_win_rate': float(team_row['win_rate'].iloc[0]) if not team_row.empty and 'win_rate' in team_row.columns else 0.5
             }
         except Exception as e:
-            print(f"⚠️ Error fetching team data: {e}")
+            print(f"⚠️ Error fetching team data from nflverse: {e}")
             return self._mock_team_data(team_abbr)
     
-    def fetch_player_data(self, player_name: str, position: str, year: int = None) -> Dict:
-        """Fetch player-level data"""
+    def fetch_player_data(self, player_name: str, position: str, year: int = 2025) -> Dict:
+        """Fetch player-level data from nflverse (nflreadpy) for 2025 season"""
         if not NFL_DATA_AVAILABLE:
             return self._mock_player_data(position)
         
-        # In production, fetch from nfl_data_py player stats
-        # For now, return mock data structure
-        return self._mock_player_data(position)
+        if year is None:
+            year = 2025
+        
+        try:
+            # Fetch player stats for 2025 season
+            player_stats = nfl.load_player_stats(seasons=[year])
+            
+            # Find player by name (case-insensitive, partial match)
+            player_row = player_stats[
+                player_stats['player_name'].str.contains(player_name, case=False, na=False)
+            ]
+            
+            if player_row.empty:
+                # Try by position if name not found
+                position_players = player_stats[player_stats['position'] == position.upper()]
+                if not position_players.empty:
+                    # Return average stats for position
+                    return self._extract_player_metrics_from_stats(position_players, position)
+                return self._mock_player_data(position)
+            
+            # Get the most recent/most complete row
+            player_row = player_row.iloc[0]
+            
+            return self._extract_player_metrics_from_stats(player_row.to_frame().T, position)
+            
+        except Exception as e:
+            print(f"⚠️ Error fetching player data from nflverse: {e}")
+            return self._mock_player_data(position)
+    
+    def _extract_player_metrics_from_stats(self, player_data, position: str) -> Dict:
+        """Extract player mechanics from nflverse stats"""
+        if position.upper() == 'QB':
+            # Calculate QB metrics from player stats
+            epa_per_dropback = float(player_data['passing_epa'].mean() / max(player_data['dropbacks'].sum(), 1)) if 'passing_epa' in player_data.columns and 'dropbacks' in player_data.columns else 0.15
+            completions = player_data['completions'].sum() if 'completions' in player_data.columns else 0
+            attempts = player_data['attempts'].sum() if 'attempts' in player_data.columns else 1
+            completion_rate = completions / max(attempts, 1)
+            
+            # Under pressure stats (if available)
+            pressure_rate = float(player_data['sacks'].sum() / max(player_data['dropbacks'].sum(), 1)) if 'sacks' in player_data.columns else 0.06
+            completion_rate_under_pressure = max(0.4, completion_rate - 0.1)  # Estimate
+            
+            # Deep ball (air_yards > 20)
+            deep_attempts = player_data['air_yards'].apply(lambda x: x > 20).sum() if 'air_yards' in player_data.columns else 0
+            deep_completions = deep_attempts * 0.45  # Estimate
+            deep_ball_accuracy = deep_completions / max(deep_attempts, 1) if deep_attempts > 0 else 0.45
+            
+            # Red zone (inside 20)
+            red_zone_td_rate = float(player_data['passing_tds'].sum() / max(player_data['red_zone_attempts'].sum(), 1)) if 'red_zone_attempts' in player_data.columns else 0.6
+            
+            # 4th quarter performance (would need play-by-play)
+            q4_epa = epa_per_dropback * 0.8  # Estimate
+            
+            # Home vs away (would need game-level data)
+            home_epa = epa_per_dropback * 1.05
+            away_epa = epa_per_dropback * 0.95
+            
+            # Weather (estimate)
+            weather_epa = epa_per_dropback * 0.9
+            
+            # Game-winning drives (would need play-by-play)
+            game_winning_drives = 0
+            games_played = player_data['games'].sum() if 'games' in player_data.columns else 16
+            
+            return {
+                'epa_per_dropback': float(epa_per_dropback),
+                'completion_rate_under_pressure': float(completion_rate_under_pressure),
+                'deep_ball_accuracy': float(deep_ball_accuracy),
+                'red_zone_td_rate': float(red_zone_td_rate),
+                'q4_epa': float(q4_epa),
+                'home_epa': float(home_epa),
+                'away_epa': float(away_epa),
+                'weather_epa': float(weather_epa),
+                'game_winning_drives': int(game_winning_drives),
+                'games_played': int(games_played)
+            }
+        
+        elif position.upper() == 'RB':
+            # Calculate RB metrics
+            carries = player_data['carries'].sum() if 'carries' in player_data.columns else 0
+            rushing_yards = player_data['rushing_yards'].sum() if 'rushing_yards' in player_data.columns else 0
+            yards_per_carry = rushing_yards / max(carries, 1)
+            
+            # Breakaway runs (20+ yards)
+            breakaway_runs = player_data['rushing_yards'].apply(lambda x: x >= 20).sum() if 'rushing_yards' in player_data.columns else 0
+            breakaway_run_rate = breakaway_runs / max(carries, 1)
+            
+            # Goal line (would need play-by-play)
+            goal_line_td_rate = 0.65  # Estimate
+            
+            # Receiving
+            receptions = player_data['receptions'].sum() if 'receptions' in player_data.columns else 0
+            targets = player_data['targets'].sum() if 'targets' in player_data.columns else 1
+            reception_rate = receptions / max(targets, 1)
+            
+            # Fumbles
+            fumbles = player_data['fumbles'].sum() if 'fumbles' in player_data.columns else 0
+            fumble_rate = fumbles / max(carries + receptions, 1)
+            
+            # Usage
+            touches = carries + receptions
+            usage_rate = touches / max(player_data['games'].sum() * 60, 1) if 'games' in player_data.columns else 0.4
+            
+            return {
+                'yards_per_carry': float(yards_per_carry),
+                'breakaway_run_rate': float(breakaway_run_rate),
+                'goal_line_td_rate': float(goal_line_td_rate),
+                'reception_rate': float(reception_rate),
+                'fumble_rate': float(fumble_rate),
+                'usage_rate': float(usage_rate)
+            }
+        
+        elif position.upper() == 'WR':
+            # Calculate WR metrics
+            targets = player_data['targets'].sum() if 'targets' in player_data.columns else 0
+            receptions = player_data['receptions'].sum() if 'receptions' in player_data.columns else 0
+            target_share = targets / max(player_data['team_targets'].sum(), 1) if 'team_targets' in player_data.columns else 0.25
+            catch_rate = receptions / max(targets, 1)
+            
+            # YAC
+            yac = player_data['receiving_yards_after_catch'].sum() if 'receiving_yards_after_catch' in player_data.columns else 0
+            yac_per_reception = yac / max(receptions, 1)
+            
+            # Deep targets (air_yards > 15)
+            deep_targets = player_data['air_yards'].apply(lambda x: x > 15).sum() if 'air_yards' in player_data.columns else 0
+            deep_target_rate = deep_targets / max(targets, 1)
+            
+            # Red zone targets
+            red_zone_targets = player_data['red_zone_targets'].sum() if 'red_zone_targets' in player_data.columns else 0
+            red_zone_target_rate = red_zone_targets / max(targets, 1)
+            
+            # Drops
+            drops = player_data['drops'].sum() if 'drops' in player_data.columns else 0
+            drop_rate = drops / max(targets, 1)
+            
+            # Separation (estimate from catch rate)
+            separation_rating = catch_rate * 1.1  # Higher catch rate = better separation
+            
+            return {
+                'target_share': float(target_share),
+                'catch_rate': float(catch_rate),
+                'yac_per_reception': float(yac_per_reception),
+                'deep_target_rate': float(deep_target_rate),
+                'red_zone_target_rate': float(red_zone_target_rate),
+                'drop_rate': float(drop_rate),
+                'separation_rating': float(separation_rating)
+            }
+        
+        else:  # DEF
+            # Defense stats (would need team defense data)
+            return self._mock_player_data('DEF')
     
     def build_parley_features(self, parley_bets: List[Dict]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """

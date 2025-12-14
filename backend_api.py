@@ -262,8 +262,8 @@ async def scan_ev_bets(request: EVBetRequest):
                                 b = odds - 1
                             p = true_prob
                             q = 1 - p
-                                kelly = (b * p - q) / b if b > 0 else 0
-                                kelly = max(0, min(kelly, 0.25))
+                            kelly = (b * p - q) / b if b > 0 else 0
+                            kelly = max(0, min(kelly, 0.25))
                         else:
                             # Basic EV calculation (fallback)
                             true_prob = implied_prob * 1.02  # Example: 2% edge
@@ -588,7 +588,7 @@ async def validate_nfl_bet(team_abbr: str, opponent_abbr: Optional[str] = None):
             except Exception as e:
                 print(f"⚠️ State-space predictor error: {e}, using basic calculation")
                 # Fallback to basic calculation
-        confidence = min(100, max(0, 50 + (epa_rank * -2) + (epa_pass * 100)))
+                confidence = min(100, max(0, 50 + (epa_rank * -2) + (epa_pass * 100)))
                 model_signal = f"EPA Rank #{epa_rank} | Pass Offense: {pass_offense}"
         else:
             # Basic calculation (fallback)
@@ -1363,17 +1363,42 @@ async def predict_nfl_parley(request: NFLParleyPredictionRequest):
                 mechanics_insights['qb_clutch_factor'] = float(qb_mech[7])  # Game-winning drives
                 mechanics_insights['qb_red_zone_efficiency'] = float(qb_mech[3])
         
-        return {
+        # Get odds from request (if provided)
+        odds = request.parley_bets[0].get('odds', 2.0) if request.parley_bets else 2.0
+        
+        # Prepare prediction data for Ollama
+        prediction_data = {
             "predicted_win_probability": win_probability,
+            "odds": odds,
             "confidence": "High" if win_probability > 0.65 else "Moderate" if win_probability > 0.5 else "Low",
             "recommendation": "STRONG_PLAY" if win_probability > 0.65 else "MODERATE_PLAY" if win_probability > 0.5 else "FADE",
             "mechanics_insights": mechanics_insights,
+            "parley_bets": request.parley_bets
+        }
+        
+        # Get betting advice from Ollama
+        ai_advice = None
+        if AI_WRAPPER_AVAILABLE:
+            try:
+                ai = get_ai_instance()
+                ai_advice = ai.get_nfl_betting_advice(prediction_data)
+            except Exception as e:
+                print(f"⚠️ Error getting Ollama betting advice: {e}")
+                ai_advice = None
+        
+        return {
+            "predicted_win_probability": win_probability,
+            "confidence": prediction_data["confidence"],
+            "recommendation": prediction_data["recommendation"],
+            "mechanics_insights": mechanics_insights,
+            "ai_betting_advice": ai_advice,
             "model_layers": {
                 "layer_1": "Player Mechanics (QB+RB+WR+DEF)",
                 "layer_2": "Team Synergy",
                 "layer_3": "Matchup Dynamics",
                 "layer_4": "Parley Combination"
-            }
+            },
+            "data_source": "nflverse (nflreadpy) - 2025 season"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error predicting parley: {str(e)}")

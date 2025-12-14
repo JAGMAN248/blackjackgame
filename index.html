@@ -785,6 +785,21 @@
                     <div class="poker-section">
                         <h3 style="color: #fbbf24; font-size: 1em; margin-bottom: 10px;">Step 5: Stack & Pot</h3>
                         <div class="form-group">
+                            <label>Your Balance ($)</label>
+                            <input type="number" id="poker-balance" value="10000" class="form-control" readonly>
+                            <small style="color: #94a3b8; font-size: 0.8em;">Auto-updated from main balance</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Your Bet Amount ($)</label>
+                            <input type="number" id="poker-bet-amount" value="20" class="form-control" min="0" step="1">
+                            <small style="color: #94a3b8; font-size: 0.8em;">Enter your bet to calculate SPR</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Pot Size ($)</label>
+                            <input type="number" id="poker-pot" value="20" class="form-control" min="0" step="1">
+                            <small style="color: #94a3b8; font-size: 0.8em;">Current pot size</small>
+                        </div>
+                        <div class="form-group">
                             <label>Effective Stack ($)</label>
                             <div class="stack-presets">
                                 <button class="preset-btn" data-stack="100">100bb</button>
@@ -792,10 +807,7 @@
                                 <button class="preset-btn" data-stack="25">25bb</button>
                             </div>
                             <input type="number" id="poker-stack" value="100" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>Pot Size ($)</label>
-                            <input type="number" id="poker-pot" value="20" class="form-control">
+                            <small style="color: #94a3b8; font-size: 0.8em;">Auto-updated from balance</small>
                         </div>
                         <div id="spr-display" class="spr-display">
                             <div class="spr-label">SPR: <span id="spr-value">5.0</span></div>
@@ -941,6 +953,11 @@
             <h3>🎓 The Coach</h3>
             <button id="close-coach-overlay" class="btn-icon">×</button>
         </div>
+    
+    <!-- Coach Reopen Button (shows when coach is closed) -->
+    <button id="open-coach-btn" class="coach-reopen-btn" style="display: none; position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: rgba(59, 130, 246, 0.8); border: 2px solid #3b82f6; color: white; font-size: 24px; cursor: pointer; z-index: 1000; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: all 0.3s ease;" title="Open The Coach">
+        🎓
+    </button>
         <div id="coach-status" class="coach-status" style="padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; margin-bottom: 8px; font-size: 0.85em;">
             <div style="color: #94a3b8;">Waiting for session data...</div>
         </div>

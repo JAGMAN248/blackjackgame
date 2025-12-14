@@ -2156,6 +2156,9 @@ function placeBet() {
     bet2 = 0;
     insuranceBet = 0;
     balance -= currentBet;
+    // Track bet volume in casinoPlayed (for washing calculations)
+    // This tracks the volume of play, not the profit
+    sessionStats.casinoPlayed = (sessionStats.casinoPlayed || 0) + currentBet;
     gameInProgress = true; // Mark game as in progress - THIS STARTS THE NEW ROUND
     isSplit = false;
     currentHand = 1;
@@ -2534,10 +2537,14 @@ function endGame(result, message) {
             totalLoss += currentBet;
             lossReasons.push('Dealer Blackjack!');
         } else if (finalDealerValue > 21) {
+            // Win: get bet back + winnings = bet * 2, but profit is only betAmount
+            // Balance already has bet deducted, so add back bet + winnings = bet * 2
             balance += currentBet * 2;
             totalWin += currentBet;
             winReasons.push('DEALER BUSTS!');
         } else if (playerValue1 > finalDealerValue) {
+            // Win: get bet back + winnings = bet * 2, but profit is only betAmount
+            // Balance already has bet deducted, so add back bet + winnings = bet * 2
             balance += currentBet * 2;
             totalWin += currentBet;
             winReasons.push(`YOU WIN! (${playerValue1} vs ${finalDealerValue})`);
@@ -3671,13 +3678,38 @@ if (profileCloseBtn) {
     });
 }
 
-// Event Listeners - Coach close button
+// Event Listeners - Coach close and open buttons
 const closeCoachOverlayBtn = document.getElementById('close-coach-overlay');
+const openCoachBtn = document.getElementById('open-coach-btn');
+const theCoach = document.getElementById('the-coach');
+
 if (closeCoachOverlayBtn) {
     closeCoachOverlayBtn.addEventListener('click', () => {
-        const theCoach = document.getElementById('the-coach');
-        if (theCoach) theCoach.style.display = 'none';
+        if (theCoach) {
+            theCoach.style.display = 'none';
+            // Show reopen button
+            if (openCoachBtn) {
+                openCoachBtn.style.display = 'flex';
+            }
+        }
     });
+}
+
+if (openCoachBtn) {
+    openCoachBtn.addEventListener('click', () => {
+        if (theCoach) {
+            theCoach.style.display = 'flex';
+            // Hide reopen button
+            openCoachBtn.style.display = 'none';
+            // Update coach content
+            updateCoach();
+        }
+    });
+    
+    // Also show reopen button if coach is initially hidden
+    if (theCoach && theCoach.style.display === 'none') {
+        openCoachBtn.style.display = 'flex';
+    }
 }
 
 // Event Listeners
@@ -3795,6 +3827,8 @@ function initPoker() {
     let currentCardSelectorTarget = null;
     
     // DOM Elements
+    const pokerBalance = document.getElementById('poker-balance');
+    const pokerBetAmount = document.getElementById('poker-bet-amount');
     const pokerStack = document.getElementById('poker-stack');
     const pokerPot = document.getElementById('poker-pot');
     const calcPokerBtn = document.getElementById('calc-poker-btn');
@@ -3856,6 +3890,68 @@ function initPoker() {
                 
                 cell.dataset.hand = row === col ? ranks[row] + ranks[col] : 
                                    (row < col ? ranks[col] + ranks[row] + 's' : ranks[row] + ranks[col] + 'o');
+                
+                // Make matrix cells clickable to select hole cards
+                cell.style.cursor = 'pointer';
+                cell.addEventListener('click', () => {
+                    const handStr = cell.dataset.hand;
+                    if (!handStr) return;
+                    
+                    // Parse hand string (e.g., "AKs", "AKo", "AA")
+                    let rank1, rank2, isSuited = false, isPair = false;
+                    
+                    if (handStr.length === 2) {
+                        // Pair (e.g., "AA")
+                        rank1 = handStr[0];
+                        rank2 = handStr[1];
+                        isPair = true;
+                    } else if (handStr.endsWith('s')) {
+                        // Suited (e.g., "AKs")
+                        rank1 = handStr[0];
+                        rank2 = handStr[1];
+                        isSuited = true;
+                    } else if (handStr.endsWith('o')) {
+                        // Offsuit (e.g., "AKo")
+                        rank1 = handStr[0];
+                        rank2 = handStr[1];
+                        isSuited = false;
+                    } else {
+                        return; // Invalid format
+                    }
+                    
+                    // Select suits for the cards
+                    // For pairs, use different suits
+                    // For suited, use same suit
+                    // For offsuit, use different suits
+                    let suit1, suit2;
+                    if (isPair) {
+                        suit1 = '♠';
+                        suit2 = '♥';
+                    } else if (isSuited) {
+                        suit1 = '♠';
+                        suit2 = '♠';
+                    } else {
+                        suit1 = '♠';
+                        suit2 = '♥';
+                    }
+                    
+                    // Set hole cards
+                    const card1 = { rank: rank1, suit: suit1, color: suitColors[suit1] };
+                    const card2 = { rank: rank2, suit: suit2, color: suitColors[suit2] };
+                    
+                    selectedHoleCards[0] = card1;
+                    selectedHoleCards[1] = card2;
+                    
+                    // Render cards in slots
+                    const holeCard1 = document.getElementById('hole-card-1');
+                    const holeCard2 = document.getElementById('hole-card-2');
+                    if (holeCard1) renderCard(holeCard1, card1);
+                    if (holeCard2) renderCard(holeCard2, card2);
+                    
+                    // Update strategy
+                    updateStrategy();
+                });
+                
                 handMatrix.appendChild(cell);
             }
         }
@@ -3944,15 +4040,40 @@ function initPoker() {
         });
     });
     
+    // Update balance from main balance variable
+    function updatePokerBalance() {
+        const currentBalance = liveMode ? liveMirrorBalance : balance;
+        if (pokerBalance) {
+            pokerBalance.value = currentBalance.toFixed(2);
+        }
+        // Update stack to match balance
+        if (pokerStack) {
+            pokerStack.value = Math.floor(currentBalance);
+        }
+        updateSPR();
+    }
+    
     // Update SPR Display
     function updateSPR() {
-        const stack = parseFloat(pokerStack?.value) || 0;
-        const pot = parseFloat(pokerPot?.value) || 0;
+        // Get balance (stack) from main balance
+        const currentBalance = liveMode ? liveMirrorBalance : balance;
+        const stack = parseFloat(pokerStack?.value) || currentBalance || 0;
+        
+        // Get pot from bet amount or pot input
+        const betAmount = parseFloat(pokerBetAmount?.value) || 0;
+        const potInput = parseFloat(pokerPot?.value) || 0;
+        // Use bet amount if provided, otherwise use pot input
+        const pot = betAmount > 0 ? betAmount : potInput;
+        
+        // Update pot input if bet amount is used
+        if (betAmount > 0 && pokerPot) {
+            pokerPot.value = betAmount;
+        }
         
         if (pot === 0) {
             if (sprValue) sprValue.textContent = '0.0';
             if (sprBar) sprBar.style.width = '0%';
-            if (sprAdvice) sprAdvice.textContent = 'Enter pot size to calculate SPR';
+            if (sprAdvice) sprAdvice.textContent = 'Enter bet amount or pot size to calculate SPR';
             return;
         }
         
@@ -3975,9 +4096,41 @@ function initPoker() {
         }
     }
     
+    // Update balance when switching tabs or when balance changes
+    updatePokerBalance();
+    
     // Update SPR on input change
     if (pokerStack) pokerStack.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
     if (pokerPot) pokerPot.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
+    if (pokerBetAmount) pokerBetAmount.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
+    
+    // Update balance when tab is switched to poker or when balance changes
+    const pokerTabEl = document.getElementById('tab-poker');
+    if (pokerTabEl) {
+        // Check on tab switch
+        const checkTabSwitch = () => {
+            if (pokerTabEl.classList.contains('active')) {
+                updatePokerBalance();
+            }
+        };
+        // Use MutationObserver to watch for class changes
+        const observer = new MutationObserver(checkTabSwitch);
+        observer.observe(pokerTabEl, { attributes: true, attributeFilter: ['class'] });
+        // Also check immediately
+        checkTabSwitch();
+    }
+    
+    // Update balance when main balance changes (hook into updateUI)
+    const originalUpdateUI = window.updateUI;
+    if (typeof originalUpdateUI === 'function') {
+        window.updateUI = function() {
+            originalUpdateUI.apply(this, arguments);
+            if (pokerTabEl && pokerTabEl.classList.contains('active')) {
+                updatePokerBalance();
+            }
+        };
+    }
+    if (pokerBetAmount) pokerBetAmount.addEventListener('input', () => { updateSPR(); maybeAutoUpdate(); });
 
     // Simple view toggle (hide matrix for faster decisions)
     if (simpleToggle && handMatrix) {
@@ -4364,12 +4517,12 @@ function initPoker() {
     }
     
     // Also set up a listener to initialize when tab is shown
-    const pokerTab = document.getElementById('tab-poker');
-    if (pokerTab) {
+    const pokerTabCheck = document.getElementById('tab-poker');
+    if (pokerTabCheck) {
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    if (pokerTab.classList.contains('active')) {
+                    if (pokerTabCheck.classList.contains('active')) {
                         console.log('Poker tab activated, checking initialization...');
                         const hm = document.getElementById('hand-matrix');
                         if (hm && hm.children.length === 0) {
@@ -5456,13 +5609,38 @@ function recordGameWin(gameType, amount) {
         // For casino games, wins are profit - add to deposit (new money coming in)
         sessionStats.deposit = (sessionStats.deposit || 0) + amount;
         // Also track volume in casinoPlayed (for washing calculations)
-        sessionStats.casinoPlayed += amount;
+        // For blackjack: The bet amount should be tracked in casinoPlayed when the bet is placed
+        // When you win, you get profit, but the bet volume was already tracked
+        // So we should NOT add the profit to casinoPlayed again (that would double count)
+        // For other games (craps, poker), add the amount to casinoPlayed for volume tracking
+        if (gameType !== 'blackjack') {
+            sessionStats.casinoPlayed += amount;
+        }
+        // Note: For blackjack, casinoPlayed should be tracked when bet is placed, not when you win
+        // The bet amount needs to be added to casinoPlayed in placeBet() function
     }
     
     // Update balance variables (for both simulator and live mirror mode)
-    balance = (balance || 0) + amount;
-    if (liveMode) {
-        liveMirrorBalance = (liveMirrorBalance || 0) + amount;
+    // For blackjack: The bet was already deducted when placed (balance -= currentBet)
+    // When you win, you should get bet back + profit = 2x bet total
+    // But user wants only profit added (betAmount), not 2x bet
+    // So we only add the profit amount (betAmount), which gives net profit
+    // Note: This means balance = original - bet + profit = original + profit (net)
+    // For blackjack, we need to add back the bet that was deducted + profit = 2x amount
+    // But user wants only profit, so we check if this is from logHandResult (which handles it)
+    // or from elsewhere. For now, we'll add only profit for blackjack when called from logHandResult
+    if (gameType === 'blackjack') {
+        // Only add profit (amount), not 2x, since user wants only profit added
+        balance = (balance || 0) + amount;
+        if (liveMode) {
+            liveMirrorBalance = (liveMirrorBalance || 0) + amount;
+        }
+    } else {
+        // For other games, add the amount directly
+        balance = (balance || 0) + amount;
+        if (liveMode) {
+            liveMirrorBalance = (liveMirrorBalance || 0) + amount;
+        }
     }
     
     // Update all displays
@@ -6632,62 +6810,77 @@ function initResultLogging() {
     }
 }
 
-// Log hand result in LIVE MIRROR mode
+// Log hand result - works in both LIVE MIRROR and SIMULATOR mode
 function logHandResult(result) {
-    if (!liveMode) return;
-    
+    // Get bet amount from current bet or input field
     const betAmount = currentBet || parseFloat(document.getElementById('bet-amount')?.value || MIN_BET);
-    const profit = result === 'win' ? betAmount : (result === 'loss' ? -betAmount : 0);
     
-    // Update live mirror stats
-    liveMirrorStats.handsPlayed++;
-    liveMirrorStats.totalWagered += betAmount;
-    liveMirrorStats.totalProfit += profit;
-    liveMirrorStats.lastHandTime = new Date();
+    if (betAmount <= 0) {
+        alert('Please enter a bet amount first.');
+        return;
+    }
     
+    // Use recordGameWin/recordGameLoss to properly update all balances and profit tracking
+    // This handles: balance, sessionStats.deposit, gameStats, health dashboard, coach
+    // Note: In blackjack, when you win, you get your bet back + winnings = 2x bet total
+    // But the user wants only the profit (betAmount) added, not 2x bet
+    // Since the bet was already deducted when placed, we only add the profit (betAmount)
     if (result === 'win') {
-        liveMirrorStats.handsWon++;
+        // Win: In blackjack, you get bet back + winnings = 2x bet
+        // But user wants only profit added (betAmount), not 2x bet
+        // Since bet was already deducted, we only add the profit (betAmount)
+        // This gives: balance = original - bet + profit = original + profit (net)
+        recordGameWin('blackjack', betAmount);
     } else if (result === 'loss') {
-        liveMirrorStats.handsLost++;
+        // Loss: bet was already deducted when placed, so no balance change needed
+        // Just track the loss for stats
+        recordGameLoss('blackjack', betAmount);
     } else {
-        liveMirrorStats.handsPushed++;
+        // Push: no profit/loss, but still track the wager volume
+        sessionStats.casinoPlayed += betAmount;
+        // Update balance variables (no change for push, but update displays)
+        updateUI();
+        updateHealthDashboard(); // Updates health tab AND coach
+        if (currentUser) saveUserProfile();
     }
     
-    // Add to hand history (keep last 50)
-    liveMirrorStats.handHistory.push({
-        result: result,
-        bet: betAmount,
-        profit: profit,
-        time: new Date(),
-        strategy: 'perfect' // Assume perfect if using app guidance
-    });
-    if (liveMirrorStats.handHistory.length > 50) {
-        liveMirrorStats.handHistory.shift();
+    // Update live mirror stats (only in live mode)
+    if (liveMode) {
+        const profit = result === 'win' ? betAmount : (result === 'loss' ? -betAmount : 0);
+        
+        liveMirrorStats.handsPlayed++;
+        liveMirrorStats.totalWagered += betAmount;
+        liveMirrorStats.totalProfit += profit;
+        liveMirrorStats.lastHandTime = new Date();
+        
+        if (result === 'win') {
+            liveMirrorStats.handsWon++;
+        } else if (result === 'loss') {
+            liveMirrorStats.handsLost++;
+        } else {
+            liveMirrorStats.handsPushed++;
+        }
+        
+        // Add to hand history (keep last 50)
+        liveMirrorStats.handHistory.push({
+            result: result,
+            bet: betAmount,
+            profit: profit,
+            time: new Date(),
+            strategy: 'perfect' // Assume perfect if using app guidance
+        });
+        if (liveMirrorStats.handHistory.length > 50) {
+            liveMirrorStats.handHistory.shift();
+        }
     }
-    
-    // Update balance
-    liveMirrorBalance += profit;
-    balance = liveMirrorBalance;
-    
-    // Update real database (sessionStats)
-    if (result === 'win') {
-        sessionStats.casinoPlayed += betAmount;
-    } else if (result === 'loss') {
-        sessionStats.casinoPlayed += betAmount;
-    } else {
-        sessionStats.casinoPlayed += betAmount;
-    }
-    
-    // Update UI
-    updateUI();
-    updateCoach();
     
     // Analyze hand with simulator
     analyzeHandWithSimulator();
     
     // Show confirmation
     const resultText = result === 'win' ? 'Won' : (result === 'loss' ? 'Lost' : 'Pushed');
-    showMessage(`Hand logged: ${resultText} $${Math.abs(profit).toFixed(2)}`, result === 'win' ? 'win' : (result === 'loss' ? 'lose' : 'tie'));
+    const profitAmount = result === 'win' ? betAmount : (result === 'loss' ? betAmount : 0);
+    showMessage(`Hand logged: ${resultText} $${profitAmount.toFixed(2)}`, result === 'win' ? 'win' : (result === 'loss' ? 'lose' : 'tie'));
 }
 
 // The Coach - Real-time Financial Advisor
@@ -6702,6 +6895,12 @@ function updateCoach() {
     
     // Show coach overlay (replaces guide overlay)
     coachEl.style.display = 'flex';
+    
+    // Hide reopen button when coach is shown
+    const openCoachBtn = document.getElementById('open-coach-btn');
+    if (openCoachBtn) {
+        openCoachBtn.style.display = 'none';
+    }
     
     // STEP 1: If not in live mirror mode, recommend switching
     if (!liveMode) {
