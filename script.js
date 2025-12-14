@@ -7120,6 +7120,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show coach on initial load
     updateCoach();
     
+    // Ensure reopen button visibility is correct based on coach state
+    const theCoach = document.getElementById('the-coach');
+    const openCoachBtn = document.getElementById('open-coach-btn');
+    if (theCoach && openCoachBtn) {
+        // Check if coach is hidden and show reopen button if needed
+        const coachDisplay = window.getComputedStyle(theCoach).display;
+        if (coachDisplay === 'none') {
+            openCoachBtn.style.display = 'flex';
+        } else {
+            openCoachBtn.style.display = 'none';
+        }
+    }
+    
     // Initialize Sportsbook Money Flow
     initSportsbookMoneyFlow();
     

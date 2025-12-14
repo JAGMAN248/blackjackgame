@@ -953,11 +953,6 @@
             <h3>🎓 The Coach</h3>
             <button id="close-coach-overlay" class="btn-icon">×</button>
         </div>
-    
-    <!-- Coach Reopen Button (shows when coach is closed) -->
-    <button id="open-coach-btn" class="coach-reopen-btn" style="display: none; position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: rgba(59, 130, 246, 0.8); border: 2px solid #3b82f6; color: white; font-size: 24px; cursor: pointer; z-index: 1000; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: all 0.3s ease;" title="Open The Coach">
-        🎓
-    </button>
         <div id="coach-status" class="coach-status" style="padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 6px; margin-bottom: 8px; font-size: 0.85em;">
             <div style="color: #94a3b8;">Waiting for session data...</div>
         </div>
@@ -969,6 +964,11 @@
             <div id="coach-reason-text">The Coach monitors your play patterns and account health.</div>
         </div>
     </div>
+
+    <!-- Coach Reopen Button (shows when coach is closed) - Must be outside coach div -->
+    <button id="open-coach-btn" class="coach-reopen-btn" title="Open The Coach">
+        🎓
+    </button>
 
     <!-- Profile Stats Modal -->
     <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
