@@ -1384,8 +1384,9 @@ function createEmptyCardSlot(target, position = 0) {
 
 // Update UI
 function updateUI() {
-    // Update balance
-    balanceEl.textContent = balance.toLocaleString();
+    // Update balance - use liveMirrorBalance in live mode, otherwise use balance
+    const displayBalance = liveMode ? (liveMirrorBalance || balance || 0) : (balance || 0);
+    balanceEl.textContent = displayBalance.toLocaleString();
     
     // Count display is updated automatically when cards are dealt
     // Cards remaining is updated automatically when cards are dealt
@@ -4770,13 +4771,23 @@ let sessionHistory = [];
 
 // Step 1: Update Dashboard (Read-Only)
 function updateHealthDashboard() {
+    // Get all game profits first (these are always clean - they're winnings)
+    const sportsbookProfit = sessionStats.gameStats?.sportsbook?.totalProfit || 0;
+    const crapsProfit = sessionStats.gameStats?.craps?.totalProfit || 0;
+    const pokerProfit = sessionStats.gameStats?.poker?.totalProfit || 0;
+    const blackjackGameProfit = sessionStats.gameStats?.blackjack?.totalProfit || 0;
+    const totalGameProfit = sportsbookProfit + crapsProfit + pokerProfit + blackjackGameProfit;
+    
     // Calculate totals from sessionStats
+    // Total bankroll = deposit (includes game profits) + casinoPlayed - withdrawn
     const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
     
-    // Calculate clean money based on deposit methods
+    // Calculate clean money based on deposit methods and game profits
     // Credit card deposits are already clean (better odds - no washing needed)
     // Gift card and other deposits need washing through casino play
+    // Game profits (winnings) are always clean money
     let cleanMoney = 0;
+    
     if (sessionStats.depositMethods && sessionStats.depositMethods.length > 0) {
         // Sum credit card deposits (already clean - better odds)
         const creditCardDeposits = sessionStats.depositMethods
@@ -4792,11 +4803,12 @@ function updateHealthDashboard() {
         // Credit card deposits are already 100% clean
         const washedMoney = Math.min((sessionStats.casinoPlayed || 0) * 0.5, nonCreditCardDeposits);
         
-        // Clean money = credit card deposits (100% clean) + washed money from other deposits
-        cleanMoney = creditCardDeposits + washedMoney;
+        // Clean money = credit card deposits (100% clean) + washed money from other deposits + game profits (always clean)
+        cleanMoney = creditCardDeposits + washedMoney + totalGameProfit;
     } else {
-        // Fallback: assume 50% is clean after play (for backward compatibility)
-        cleanMoney = (sessionStats.casinoPlayed || 0) * 0.5;
+        // Fallback: assume 50% of deposits are clean after play + all game profits are clean
+        const depositAmount = (sessionStats.deposit || 0) - totalGameProfit; // Remove game profits from deposit to avoid double counting
+        cleanMoney = (depositAmount * 0.5) + totalGameProfit;
     }
     
     const dirtyMoney = Math.max(0, totalBankroll - cleanMoney);
@@ -4833,14 +4845,43 @@ function updateHealthDashboard() {
         riskLevelEl.style.color = riskColor;
     }
     
-    // Action required
+    // Get blackjack session profit (from live mirror stats)
+    const blackjackSessionProfit = liveMirrorStats?.totalProfit || 0;
+    
+    // Calculate total profit (same as coach)
+    const totalProfit = totalGameProfit + blackjackSessionProfit;
+    
+    // Action required (game profits already calculated at top of function)
     if (actionTextEl) {
+        let actionHTML = '';
+        if (totalProfit !== 0) {
+            actionHTML += `<div style="margin-bottom: 10px; padding: 8px; background: rgba(34, 197, 94, 0.1); border-radius: 6px; border-left: 3px solid #22c55e;">
+                <div style="color: #22c55e; font-weight: bold; margin-bottom: 4px;">💰 Game Winnings & Profit</div>`;
+            if (sportsbookProfit !== 0) {
+                actionHTML += `<div style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 2px;">Sportsbook: <strong>$${sportsbookProfit >= 0 ? '+' : ''}${sportsbookProfit.toFixed(2)}</strong></div>`;
+            }
+            if (crapsProfit !== 0) {
+                actionHTML += `<div style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 2px;">Craps: <strong>$${crapsProfit >= 0 ? '+' : ''}${crapsProfit.toFixed(2)}</strong></div>`;
+            }
+            if (pokerProfit !== 0) {
+                actionHTML += `<div style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 2px;">Poker: <strong>$${pokerProfit >= 0 ? '+' : ''}${pokerProfit.toFixed(2)}</strong></div>`;
+            }
+            if (blackjackGameProfit !== 0) {
+                actionHTML += `<div style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 2px;">Blackjack (Manual): <strong>$${blackjackGameProfit >= 0 ? '+' : ''}${blackjackGameProfit.toFixed(2)}</strong></div>`;
+            }
+            if (blackjackSessionProfit !== 0) {
+                actionHTML += `<div style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 2px;">Blackjack (Session): <strong>$${blackjackSessionProfit >= 0 ? '+' : ''}${blackjackSessionProfit.toFixed(2)}</strong></div>`;
+            }
+            actionHTML += `<div style="color: #22c55e; font-size: 0.95em; font-weight: bold; margin-top: 4px; border-top: 1px solid rgba(34, 197, 94, 0.3); padding-top: 4px;">Total: <strong>$${totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(2)}</strong></div>`;
+            actionHTML += `</div>`;
+        }
         if (dirtyMoney > 0) {
             const washAmount = dirtyMoney * 2; // Need 2x turnover to wash
-            actionTextEl.innerHTML = `You have <strong>$${dirtyMoney.toFixed(2)}</strong> of dirty money. <br>Suggested Action: Play <strong>$${washAmount.toFixed(2)}</strong> of Blackjack.`;
-        } else {
-            actionTextEl.textContent = 'No action needed. All funds are clean.';
+            actionHTML += `You have <strong>$${dirtyMoney.toFixed(2)}</strong> of dirty money. <br>Suggested Action: Play <strong>$${washAmount.toFixed(2)}</strong> of Blackjack.`;
+        } else if (totalProfit === 0) {
+            actionHTML = 'No action needed. All funds are clean.';
         }
+        actionTextEl.innerHTML = actionHTML || 'No action needed. All funds are clean.';
     }
 }
 
@@ -5356,8 +5397,13 @@ function initGameStats() {
         sessionStats.gameStats = {
             sportsbook: { wins: 0, losses: 0, totalProfit: 0 },
             craps: { wins: 0, losses: 0, totalProfit: 0 },
-            poker: { wins: 0, losses: 0, totalProfit: 0 }
+            poker: { wins: 0, losses: 0, totalProfit: 0 },
+            blackjack: { wins: 0, losses: 0, totalProfit: 0 }
         };
+    }
+    // Ensure blackjack stats exist for backward compatibility
+    if (!sessionStats.gameStats.blackjack) {
+        sessionStats.gameStats.blackjack = { wins: 0, losses: 0, totalProfit: 0 };
     }
 }
 
@@ -5366,9 +5412,21 @@ function updateGameStatsDisplay(gameType) {
     const stats = sessionStats.gameStats[gameType];
     if (!stats) return;
     
-    const winsEl = document.getElementById(`${gameType}-wins`);
-    const lossesEl = document.getElementById(`${gameType}-losses`);
-    const netProfitEl = document.getElementById(`${gameType}-net-profit`);
+    // Handle different ID naming conventions
+    let winsId, lossesId, netProfitId;
+    if (gameType === 'sportsbook') {
+        winsId = 'sports-wins';
+        lossesId = 'sports-losses';
+        netProfitId = 'sports-net-profit';
+    } else {
+        winsId = `${gameType}-wins`;
+        lossesId = `${gameType}-losses`;
+        netProfitId = `${gameType}-net-profit`;
+    }
+    
+    const winsEl = document.getElementById(winsId);
+    const lossesEl = document.getElementById(lossesId);
+    const netProfitEl = document.getElementById(netProfitId);
     
     if (winsEl) winsEl.textContent = `$${stats.wins.toFixed(2)}`;
     if (lossesEl) lossesEl.textContent = `$${stats.losses.toFixed(2)}`;
@@ -5390,16 +5448,27 @@ function recordGameWin(gameType, amount) {
     
     // Update session stats
     if (gameType === 'sportsbook') {
-        sessionStats.sportsPlayed += amount;
-    } else if (gameType === 'craps') {
-        sessionStats.casinoPlayed += amount;
-    } else if (gameType === 'poker') {
+        // For sportsbook wins, amount is profit (net gain)
+        // Don't add to sportsPlayed (that tracks wagers, not profits)
+        // Add profit to deposit (new money coming in)
+        sessionStats.deposit = (sessionStats.deposit || 0) + amount;
+    } else if (gameType === 'craps' || gameType === 'poker' || gameType === 'blackjack') {
+        // For casino games, wins are profit - add to deposit (new money coming in)
+        sessionStats.deposit = (sessionStats.deposit || 0) + amount;
+        // Also track volume in casinoPlayed (for washing calculations)
         sessionStats.casinoPlayed += amount;
     }
     
+    // Update balance variables (for both simulator and live mirror mode)
+    balance = (balance || 0) + amount;
+    if (liveMode) {
+        liveMirrorBalance = (liveMirrorBalance || 0) + amount;
+    }
+    
+    // Update all displays
     updateGameStatsDisplay(gameType);
-    updateHealthDashboard();
-    updateCoach(); // Update coach when game wins recorded
+    updateUI(); // Update blackjack balance display
+    updateHealthDashboard(); // Updates health tab AND coach
     if (currentUser) saveUserProfile();
 }
 
@@ -5414,16 +5483,27 @@ function recordGameLoss(gameType, amount) {
     
     // Update session stats
     if (gameType === 'sportsbook') {
-        sessionStats.sportsPlayed += amount;
-    } else if (gameType === 'craps') {
-        sessionStats.casinoPlayed += amount;
-    } else if (gameType === 'poker') {
+        // For sportsbook losses, amount is the loss amount
+        // Don't add to sportsPlayed (that tracks wagers, not losses)
+        // Subtract loss from deposit (money going out)
+        sessionStats.deposit = Math.max(0, (sessionStats.deposit || 0) - amount);
+    } else if (gameType === 'craps' || gameType === 'poker' || gameType === 'blackjack') {
+        // For casino games, losses subtract from deposit (money going out)
+        sessionStats.deposit = Math.max(0, (sessionStats.deposit || 0) - amount);
+        // Also track volume in casinoPlayed (for washing calculations)
         sessionStats.casinoPlayed += amount;
     }
     
+    // Update balance variables (for both simulator and live mirror mode)
+    balance = Math.max(0, (balance || 0) - amount);
+    if (liveMode) {
+        liveMirrorBalance = Math.max(0, (liveMirrorBalance || 0) - amount);
+    }
+    
+    // Update all displays
     updateGameStatsDisplay(gameType);
-    updateHealthDashboard();
-    updateCoach(); // Update coach when game losses recorded
+    updateUI(); // Update blackjack balance display
+    updateHealthDashboard(); // Updates health tab AND coach
     if (currentUser) saveUserProfile();
 }
 
@@ -6343,6 +6423,60 @@ function initCashOutHandler() {
         });
     }
     
+    // Wipe Local Data Button Handler
+    const wipeLocalDataBtn = document.getElementById('wipe-local-data-btn');
+    if (wipeLocalDataBtn) {
+        wipeLocalDataBtn.addEventListener('click', () => {
+            if (confirm('⚠️ WARNING: This will delete ALL local data including:\n\n• Session statistics\n• Game history\n• User profiles\n• All saved balances\n\nThis cannot be undone. Are you sure?')) {
+                // Clear all localStorage data
+                localStorage.clear();
+                
+                // Reset session stats
+                sessionStats = {
+                    deposit: 0,
+                    casinoPlayed: 0,
+                    sportsPlayed: 0,
+                    withdrawn: 0,
+                    freeSpins: 0,
+                    freeSpinWinnings: 0,
+                    cashPlayed: 0,
+                    lastDepositDate: null,
+                    depositMethods: [],
+                    walletEntries: [],
+                    plannedActivities: [],
+                    gameStats: {
+                        sportsbook: { wins: 0, losses: 0, totalProfit: 0 },
+                        craps: { wins: 0, losses: 0, totalProfit: 0 },
+                        poker: { wins: 0, losses: 0, totalProfit: 0 },
+                        blackjack: { wins: 0, losses: 0, totalProfit: 0 }
+                    }
+                };
+                
+                // Reset balance
+                balance = 0;
+                liveMirrorBalance = 0;
+                currentUser = null;
+                
+                // Reset live mirror stats
+                liveMirrorStats = {
+                    handsPlayed: 0,
+                    handsWon: 0,
+                    handsLost: 0,
+                    handsPushed: 0,
+                    totalWagered: 0,
+                    totalProfit: 0,
+                    perfectStrategyCount: 0,
+                    sessionStartTime: null,
+                    lastHandTime: null,
+                    handHistory: []
+                };
+                
+                // Reload page to apply changes
+                location.reload();
+            }
+        });
+    }
+    
     if (cashOutBtn && cashOutModal) {
         cashOutBtn.addEventListener('click', () => {
             const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
@@ -6649,6 +6783,16 @@ function updateCoach() {
     const totalBankroll = (sessionStats.deposit || 0) + (sessionStats.casinoPlayed || 0) - (sessionStats.withdrawn || 0);
     const currentBalance = totalBankroll || liveMirrorBalance || balance || 0;
     
+    // Get all game profits
+    const sportsbookProfit = sessionStats.gameStats?.sportsbook?.totalProfit || 0;
+    const crapsProfit = sessionStats.gameStats?.craps?.totalProfit || 0;
+    const pokerProfit = sessionStats.gameStats?.poker?.totalProfit || 0;
+    const blackjackGameProfit = sessionStats.gameStats?.blackjack?.totalProfit || 0;
+    
+    // Calculate total profit (blackjack session profit + all game profits)
+    const totalGameProfit = sportsbookProfit + crapsProfit + pokerProfit + blackjackGameProfit;
+    const totalProfit = profit + totalGameProfit;
+    
     // Update Status with consistent balance
     let statusHTML = `
         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -6664,9 +6808,33 @@ function updateCoach() {
             <span style="color: #60a5fa; font-weight: bold;">$${stats.totalWagered.toFixed(2)}</span>
         </div>
         <div style="display: flex; justify-content: space-between;">
-            <span style="color: #94a3b8;">Session Profit:</span>
-            <span style="color: ${profit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</span>
+            <span style="color: #94a3b8;">Total Profit & Winnings:</span>
+            <span style="color: ${totalProfit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(2)}</span>
         </div>
+        ${totalGameProfit !== 0 || profit !== 0 ? `
+        <div style="margin-top: 4px; font-size: 0.85em; color: #94a3b8;">
+            ${sportsbookProfit !== 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span>↳ Sportsbook:</span>
+                <span style="color: ${sportsbookProfit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${sportsbookProfit >= 0 ? '+' : ''}${sportsbookProfit.toFixed(2)}</span>
+            </div>` : ''}
+            ${crapsProfit !== 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span>↳ Craps:</span>
+                <span style="color: ${crapsProfit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${crapsProfit >= 0 ? '+' : ''}${crapsProfit.toFixed(2)}</span>
+            </div>` : ''}
+            ${pokerProfit !== 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span>↳ Poker:</span>
+                <span style="color: ${pokerProfit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${pokerProfit >= 0 ? '+' : ''}${pokerProfit.toFixed(2)}</span>
+            </div>` : ''}
+            ${blackjackGameProfit !== 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span>↳ Blackjack (Manual):</span>
+                <span style="color: ${blackjackGameProfit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${blackjackGameProfit >= 0 ? '+' : ''}${blackjackGameProfit.toFixed(2)}</span>
+            </div>` : ''}
+            ${profit !== 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span>↳ Blackjack (Session):</span>
+            <span style="color: ${profit >= 0 ? '#22c55e' : '#f87171'}; font-weight: bold;">$${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</span>
+            </div>` : ''}
+        </div>
+        ` : ''}
     `;
     coachStatus.innerHTML = statusHTML;
     
